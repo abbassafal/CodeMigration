@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TaxMasterMigration>();
         services.AddScoped<UsersMasterMigration>();
         services.AddScoped<ErpPrLinesMigration>();
+        services.AddScoped<ARCMainMigration>();
 
         return services;
     }

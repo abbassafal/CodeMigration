@@ -16,6 +16,7 @@ public class MigrationController : Controller
     private readonly TaxMasterMigration _taxMigration;
     private readonly UsersMasterMigration _usersmasterMigration;
     private readonly ErpPrLinesMigration _erpprlinesMigration;
+    private readonly ARCMainMigration _arcMainMigration;
 
 
     public MigrationController(
@@ -29,7 +30,8 @@ public class MigrationController : Controller
         EventMasterMigration eventMigration,
         TaxMasterMigration taxMigration,
         UsersMasterMigration usersmasterMigration,
-        ErpPrLinesMigration erpprlinesMigration)
+        ErpPrLinesMigration erpprlinesMigration,
+        ARCMainMigration arcMainMigration)
     {
         _uomMigration = uomMigration;
         _plantMigration = plantMigration;
@@ -42,6 +44,7 @@ public class MigrationController : Controller
         _taxMigration = taxMigration;
         _usersmasterMigration = usersmasterMigration;
         _erpprlinesMigration = erpprlinesMigration;
+        _arcMainMigration = arcMainMigration;
     }
 
     public IActionResult Index()
@@ -66,6 +69,7 @@ public class MigrationController : Controller
             new { name = "tax", description = "TBL_TaxMaster to tax_master" },
             new { name = "users", description = "TBL_USERMASTERFINAL to users" },
             new { name = "erpprlines", description = "TBL_PRTRANSACTION to erp_pr_lines" },
+            new { name = "arcmain", description = "TBL_ARCMain to arc_header" },
         };
         return Json(tables);
     }
@@ -126,6 +130,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "erp_pr_lines")
         {
             var mappings = _erpprlinesMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "arcmain")
+        {
+            var mappings = _arcMainMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -199,6 +208,10 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "erp_pr_lines")
             {
                 recordCount = await _erpprlinesMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "arcmain")
+            {
+                recordCount = await _arcMainMigration.MigrateAsync();
             }
             else
             {
