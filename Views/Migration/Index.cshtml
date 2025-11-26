@@ -502,6 +502,30 @@
             border-left-color: #ef4444;
         }
 
+        .migration-actions {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .migration-actions .btn {
+            border-radius: 8px;
+            font-size: 0.875rem;
+            padding: 8px 16px;
+        }
+
+        .migration-actions .btn-outline-info:hover {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+            color: white;
+        }
+
+        .migration-actions .btn-outline-warning:hover {
+            background-color: var(--warning-color);
+            border-color: var(--warning-color);
+            color: white;
+        }
+
         @@keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
@@ -683,6 +707,14 @@
                             '<span>Ready to Migrate</span>' +
                         '</div>' +
                         '<div id="' + table + 'Message" class="d-none alert"></div>' +
+                        '<div class="migration-actions">' +
+                            '<button class="btn btn-outline-info btn-sm me-2" onclick="testConnections(\'' + table + '\')">' +
+                                '<i class="fas fa-plug"></i> Test Connections' +
+                            '</button>' +
+                            '<button class="btn btn-outline-warning btn-sm me-2" onclick="validateSourceData(\'' + table + '\')">' +
+                                '<i class="fas fa-check-circle"></i> Validate Data' +
+                            '</button>' +
+                        '</div>' +
                         '<button class="btn-migrate" id="migrate' + table + 'Btn" onclick="startMigration(\'' + table + '\')">' +
                             '<i class="fas fa-play"></i>' +
                             '<span>Start Migration</span>' +
@@ -757,6 +789,108 @@
             .finally(() => {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-redo"></i><span>Migrate Again</span>';
+            });
+        }
+
+        function testConnections(table) {
+            fetch('/Migration/test-connections', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const message = document.getElementById(table + 'Message');
+                if (data.success) {
+                    const diagnostics = data.diagnostics;
+                    let connectionInfo = '<strong><i class="fas fa-plug"></i> Connection Test Results:</strong><br>';
+                    connectionInfo += `<strong>SQL Server:</strong> ${diagnostics.SqlServer.Connected ? '<span class="text-success">✓ Connected</span>' : '<span class="text-danger">✗ Failed</span>'}<br>`;
+                    if (!diagnostics.SqlServer.Connected) {
+                        connectionInfo += `<small class="text-muted">Error: ${diagnostics.SqlServer.Error}</small><br>`;
+                    }
+                    connectionInfo += `<strong>PostgreSQL:</strong> ${diagnostics.PostgreSQL.Connected ? '<span class="text-success">✓ Connected</span>' : '<span class="text-danger">✗ Failed</span>'}<br>`;
+                    if (!diagnostics.PostgreSQL.Connected) {
+                        connectionInfo += `<small class="text-muted">Error: ${diagnostics.PostgreSQL.Error}</small><br>`;
+                    }
+                    connectionInfo += `<small class="text-muted">Tested at: ${diagnostics.Timestamp}</small>`;
+                    
+                    message.className = 'alert alert-info';
+                    message.innerHTML = connectionInfo;
+                    message.classList.remove('d-none');
+                } else {
+                    message.className = 'alert alert-danger';
+                    message.innerHTML = '<strong><i class="fas fa-exclamation-triangle"></i> Connection Test Failed:</strong> ' + data.error;
+                    message.classList.remove('d-none');
+                }
+            })
+            .catch(error => {
+                const message = document.getElementById(table + 'Message');
+                message.className = 'alert alert-danger';
+                message.innerHTML = '<strong><i class="fas fa-exclamation-triangle"></i> Network Error:</strong> ' + error.message;
+                message.classList.remove('d-none');
+            });
+        }
+
+        function validateSourceData(table) {
+            fetch(`/Migration/validate-source-data/${table}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const message = document.getElementById(table + 'Message');
+                if (data.success) {
+                    const validation = data.validation;
+                    let validationInfo = '<strong><i class="fas fa-check-circle"></i> Data Validation Results:</strong><br>';
+                    
+                    if (validation.TableExists) {
+                        validationInfo += `<strong>Table Status:</strong> <span class="text-success">✓ Exists</span><br>`;
+                        validationInfo += `<strong>Total Records:</strong> ${validation.TotalRecords}<br>`;
+                        
+                        if (validation.DataQuality) {
+                            const quality = validation.DataQuality;
+                            validationInfo += '<strong>Data Quality Issues:</strong><br>';
+                            
+                            if (table === 'material') {
+                                validationInfo += `• Null Item Codes: ${quality.Issues.NullItemCodes}<br>`;
+                                validationInfo += `• Null UOM IDs: ${quality.Issues.NullUOMIds}<br>`;
+                                validationInfo += `• Null Material Group IDs: ${quality.Issues.NullMaterialGroupIds}<br>`;
+                                validationInfo += `• Null Client SAP IDs: ${quality.Issues.NullClientSAPIds}<br>`;
+                            } else if (table === 'country') {
+                                validationInfo += `• Null Country Names: ${quality.Issues.NullCountryNames}<br>`;
+                                validationInfo += `• Null Country Codes: ${quality.Issues.NullCountryCodes}<br>`;
+                                validationInfo += `• Null Country Master IDs: ${quality.Issues.NullCountryMasterIds}<br>`;
+                            }
+                            
+                            const hasIssues = Object.values(quality.Issues).some(issue => parseInt(issue) > 0);
+                            if (!hasIssues) {
+                                validationInfo += '<span class="text-success">✓ No data quality issues found</span>';
+                            }
+                        }
+                    } else {
+                        validationInfo += `<strong>Table Status:</strong> <span class="text-danger">✗ Does not exist</span><br>`;
+                        if (validation.Error) {
+                            validationInfo += `<small class="text-muted">Error: ${validation.Error}</small>`;
+                        }
+                    }
+                    
+                    message.className = validation.TableExists && !validation.Error ? 'alert alert-success' : 'alert alert-warning';
+                    message.innerHTML = validationInfo;
+                    message.classList.remove('d-none');
+                } else {
+                    message.className = 'alert alert-danger';
+                    message.innerHTML = '<strong><i class="fas fa-exclamation-triangle"></i> Validation Failed:</strong> ' + data.error;
+                    message.classList.remove('d-none');
+                }
+            })
+            .catch(error => {
+                const message = document.getElementById(table + 'Message');
+                message.className = 'alert alert-danger';
+                message.innerHTML = '<strong><i class="fas fa-exclamation-triangle"></i> Network Error:</strong> ' + error.message;
+                message.classList.remove('d-none');
             });
         }
     </script>

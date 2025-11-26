@@ -38,36 +38,69 @@ public abstract class MigrationService
     /// </summary>
     public virtual async Task<int> MigrateAsync(bool useTransaction = true)
     {
-        using var sqlConn = GetSqlServerConnection();
-        using var pgConn = GetPostgreSqlConnection();
-        await sqlConn.OpenAsync();
-        await pgConn.OpenAsync();
-
-        if (useTransaction)
+        SqlConnection? sqlConn = null;
+        NpgsqlConnection? pgConn = null;
+        
+        try
         {
-            using var transaction = await pgConn.BeginTransactionAsync();
+            sqlConn = GetSqlServerConnection();
+            pgConn = GetPostgreSqlConnection();
+            
+            // Test SQL Server connection
             try
             {
-                int result = await ExecuteMigrationAsync(sqlConn, pgConn, transaction);
-                await transaction.CommitAsync();
-                return result;
+                await sqlConn.OpenAsync();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                await transaction.RollbackAsync();
-                throw;
+                throw new Exception($"Failed to connect to SQL Server: {ex.Message}. " +
+                                  $"Please check: 1) SQL Server is running, 2) Connection string is correct, " +
+                                  $"3) Network connectivity, 4) Firewall settings, 5) Authentication credentials", ex);
+            }
+            
+            // Test PostgreSQL connection
+            try
+            {
+                await pgConn.OpenAsync();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to connect to PostgreSQL: {ex.Message}. " +
+                                  $"Please check: 1) PostgreSQL is running, 2) Connection string is correct, " +
+                                  $"3) Network connectivity, 4) Database exists, 5) User permissions", ex);
+            }
+
+            if (useTransaction)
+            {
+                using var transaction = await pgConn.BeginTransactionAsync();
+                try
+                {
+                    int result = await ExecuteMigrationAsync(sqlConn, pgConn, transaction);
+                    await transaction.CommitAsync();
+                    return result;
+                }
+                catch (Exception)
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+            else
+            {
+                return await ExecuteMigrationAsync(sqlConn, pgConn);
             }
         }
-        else
+        finally
         {
-            return await ExecuteMigrationAsync(sqlConn, pgConn);
+            sqlConn?.Dispose();
+            pgConn?.Dispose();
         }
     }
 
     /// <summary>
     /// Dynamically generates mappings based on SelectQuery, InsertQuery, and Logics
     /// </summary>
-    public List<object> GetMappings()
+    public virtual List<object> GetMappings()
     {
         // Parse sources from SELECT
         var sources = ParseSelectColumns(SelectQuery);
@@ -182,5 +215,82 @@ public abstract class MigrationService
         }
 
         return (totalMigrated, results);
+    }
+
+    /// <summary>
+    /// Tests database connections and returns diagnostic information
+    /// </summary>
+    public virtual async Task<object> TestConnectionsAsync()
+    {
+        var result = new Dictionary<string, object>
+        {
+            ["SqlServer"] = new Dictionary<string, object>
+            {
+                ["Connected"] = false,
+                ["Error"] = "",
+                ["ConnectionString"] = "",
+                ["ServerVersion"] = ""
+            },
+            ["PostgreSQL"] = new Dictionary<string, object>
+            {
+                ["Connected"] = false,
+                ["Error"] = "",
+                ["ConnectionString"] = "",
+                ["ServerVersion"] = ""
+            },
+            ["Timestamp"] = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC")
+        };
+
+        // Test SQL Server
+        try
+        {
+            using var sqlConn = GetSqlServerConnection();
+            await sqlConn.OpenAsync();
+            ((Dictionary<string, object>)result["SqlServer"])["Connected"] = true;
+            ((Dictionary<string, object>)result["SqlServer"])["ConnectionString"] = MaskConnectionString(_configuration.GetConnectionString("SqlServer") ?? "");
+            ((Dictionary<string, object>)result["SqlServer"])["ServerVersion"] = sqlConn.ServerVersion;
+        }
+        catch (Exception ex)
+        {
+            ((Dictionary<string, object>)result["SqlServer"])["Connected"] = false;
+            ((Dictionary<string, object>)result["SqlServer"])["Error"] = ex.Message;
+            ((Dictionary<string, object>)result["SqlServer"])["ConnectionString"] = MaskConnectionString(_configuration.GetConnectionString("SqlServer") ?? "");
+        }
+
+        // Test PostgreSQL
+        try
+        {
+            using var pgConn = GetPostgreSqlConnection();
+            await pgConn.OpenAsync();
+            ((Dictionary<string, object>)result["PostgreSQL"])["Connected"] = true;
+            ((Dictionary<string, object>)result["PostgreSQL"])["ConnectionString"] = MaskConnectionString(_configuration.GetConnectionString("PostgreSql") ?? "");
+            ((Dictionary<string, object>)result["PostgreSQL"])["ServerVersion"] = pgConn.ServerVersion;
+        }
+        catch (Exception ex)
+        {
+            ((Dictionary<string, object>)result["PostgreSQL"])["Connected"] = false;
+            ((Dictionary<string, object>)result["PostgreSQL"])["Error"] = ex.Message;
+            ((Dictionary<string, object>)result["PostgreSQL"])["ConnectionString"] = MaskConnectionString(_configuration.GetConnectionString("PostgreSql") ?? "");
+        }
+
+        return result;
+    }
+
+    private string MaskConnectionString(string connectionString)
+    {
+        if (string.IsNullOrEmpty(connectionString)) return "";
+        
+        // Mask sensitive information but keep structure visible
+        var masked = connectionString;
+        var patterns = new[] { "password", "pwd", "user id", "uid" };
+        
+        foreach (var pattern in patterns)
+        {
+            var regex = new System.Text.RegularExpressions.Regex($@"{pattern}=[^;]*", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            masked = regex.Replace(masked, $"{pattern}=***");
+        }
+        
+        return masked;
     }
 }

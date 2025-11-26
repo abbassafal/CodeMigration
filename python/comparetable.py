@@ -34,44 +34,61 @@ try:
     # Get MSSQL columns
     print("\n[3/3] Fetching table structures...")
     
-    mssql_query = f"""
-    SELECT 
-        COLUMN_NAME,
-        DATA_TYPE
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = '{mssql_table}' AND TABLE_SCHEMA = 'dbo'
-    ORDER BY ORDINAL_POSITION
-    """
+    # Use direct cursor approach for better control
+    cursor = mssql_conn.cursor()
+    cursor.execute("""
+        SELECT 
+            COLUMN_NAME,
+            DATA_TYPE
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_NAME = ? AND TABLE_SCHEMA = 'dbo'
+        ORDER BY ORDINAL_POSITION
+    """, (mssql_table,))
     
-    df_mssql = pd.read_sql(mssql_query, mssql_conn)
+    mssql_rows = cursor.fetchall()
+    cursor.close()
     
-    if len(df_mssql) == 0:
+    if len(mssql_rows) == 0:
         print(f"✗ Table '{mssql_table}' not found in MSSQL!")
         mssql_conn.close()
         pg_conn.close()
         input("\nPress Enter to exit...")
         exit()
     
+    # Convert to DataFrame - handle the cursor result properly
+    mssql_data = []
+    for row in mssql_rows:
+        mssql_data.append({'COLUMN_NAME': row[0], 'DATA_TYPE': row[1]})
+    df_mssql = pd.DataFrame(mssql_data)
+    
     print(f"✓ MSSQL: {len(df_mssql)} columns")
     
-    # Get PostgreSQL columns
-    pg_query = f"""
-    SELECT 
-        column_name,
-        data_type
-    FROM information_schema.columns
-    WHERE table_name = '{pg_table}' AND table_schema = 'public'
-    ORDER BY ordinal_position
-    """
+    # Get PostgreSQL columns using cursor approach
+    cursor = pg_conn.cursor()
+    cursor.execute("""
+        SELECT 
+            column_name,
+            data_type
+        FROM information_schema.columns
+        WHERE table_name = %s AND table_schema = 'public'
+        ORDER BY ordinal_position
+    """, (pg_table,))
     
-    df_pg = pd.read_sql(pg_query, pg_conn)
+    pg_rows = cursor.fetchall()
+    cursor.close()
     
-    if len(df_pg) == 0:
+    if len(pg_rows) == 0:
         print(f"✗ Table '{pg_table}' not found in PostgreSQL!")
         mssql_conn.close()
         pg_conn.close()
         input("\nPress Enter to exit...")
         exit()
+    
+    # Convert to DataFrame - handle the cursor result properly
+    pg_data = []
+    for row in pg_rows:
+        pg_data.append({'column_name': row[0], 'data_type': row[1]})
+    df_pg = pd.DataFrame(pg_data)
     
     print(f"✓ PostgreSQL: {len(df_pg)} columns")
     
