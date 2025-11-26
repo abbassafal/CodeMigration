@@ -51,29 +51,83 @@ public class MaterialMasterMigration : MigrationService
         }
 
         int insertedCount = 0;
-        while (await reader.ReadAsync())
+        int processedCount = 0;
+        
+        try
         {
-            // Skip records where any FK is 0 to avoid constraint violations
-            if ((int)reader["UOMId"] == 0 || (int)reader["MaterialGroupId"] == 0) continue;
+            while (await reader.ReadAsync())
+            {
+                processedCount++;
+                try
+                {
+                    // Validate field values before processing
+                    var itemId = reader.IsDBNull(reader.GetOrdinal("ITEMID")) ? 0 : Convert.ToInt32(reader["ITEMID"]);
+                    var itemCode = reader.IsDBNull(reader.GetOrdinal("ITEMCODE")) ? "" : reader["ITEMCODE"].ToString();
+                    var itemName = reader.IsDBNull(reader.GetOrdinal("ITEMNAME")) ? "" : reader["ITEMNAME"].ToString();
+                    var itemDescription = reader.IsDBNull(reader.GetOrdinal("ITEMDESCRIPTION")) ? "" : reader["ITEMDESCRIPTION"].ToString();
+                    var uomId = reader.IsDBNull(reader.GetOrdinal("UOMId")) ? 0 : Convert.ToInt32(reader["UOMId"]);
+                    var materialGroupId = reader.IsDBNull(reader.GetOrdinal("MaterialGroupId")) ? 0 : Convert.ToInt32(reader["MaterialGroupId"]);
+                    var clientSapId = reader.IsDBNull(reader.GetOrdinal("ClientSAPId")) ? 0 : Convert.ToInt32(reader["ClientSAPId"]);
 
-            pgCmd.Parameters.Clear();
-            pgCmd.Parameters.AddWithValue("@material_id", reader["ITEMID"]);
-            pgCmd.Parameters.AddWithValue("@material_code", reader["ITEMCODE"]);
-            pgCmd.Parameters.AddWithValue("@material_name", reader["ITEMNAME"]);
-            pgCmd.Parameters.AddWithValue("@material_description", reader["ITEMDESCRIPTION"]);
-            pgCmd.Parameters.AddWithValue("@uom_id", reader["UOMId"]);
-            pgCmd.Parameters.AddWithValue("@material_group_id", reader["MaterialGroupId"]);
-            pgCmd.Parameters.AddWithValue("@company_id", reader["ClientSAPId"]);
-            pgCmd.Parameters.AddWithValue("@created_by", 0); // Default: 0
-            pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow); // Default: Now
-            pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value); // Default: null
-            pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value); // Default: null
-            pgCmd.Parameters.AddWithValue("@is_deleted", false); // Default: false
-            pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value); // Default: null
-            pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value); // Default: null
-            int result = await pgCmd.ExecuteNonQueryAsync();
-            if (result > 0) insertedCount++;
+                    // Skip records where any required FK is 0 to avoid constraint violations
+                    if (uomId == 0 || materialGroupId == 0)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount} (ITEMID: {itemId}) - Missing required FK: UOMId={uomId}, MaterialGroupId={materialGroupId}");
+                        continue;
+                    }
+
+                    // Validate required fields
+                    if (string.IsNullOrWhiteSpace(itemCode))
+                    {
+                        throw new Exception($"Invalid ITEMCODE at record {processedCount} (ITEMID: {itemId}) - Cannot be null or empty");
+                    }
+
+                    pgCmd.Parameters.Clear();
+                    pgCmd.Parameters.AddWithValue("@material_id", itemId);
+                    pgCmd.Parameters.AddWithValue("@material_code", itemCode ?? "");
+                    pgCmd.Parameters.AddWithValue("@material_name", itemName ?? "");
+                    pgCmd.Parameters.AddWithValue("@material_description", itemDescription ?? "");
+                    pgCmd.Parameters.AddWithValue("@uom_id", uomId);
+                    pgCmd.Parameters.AddWithValue("@material_group_id", materialGroupId);
+                    pgCmd.Parameters.AddWithValue("@company_id", clientSapId);
+                    pgCmd.Parameters.AddWithValue("@created_by", 0); // Default: 0
+                    pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow); // Default: Now
+                    pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value); // Default: null
+                    pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value); // Default: null
+                    pgCmd.Parameters.AddWithValue("@is_deleted", false); // Default: false
+                    pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value); // Default: null
+                    pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value); // Default: null
+                    
+                    int result = await pgCmd.ExecuteNonQueryAsync();
+                    if (result > 0) insertedCount++;
+                }
+                catch (Exception recordEx)
+                {
+                    throw new Exception($"Error processing record {processedCount} in Material Master Migration: {recordEx.Message}", recordEx);
+                }
+            }
         }
+        catch (Exception readerEx)
+        {
+            // Check if it's a connection or stream issue
+            if (readerEx.Message.Contains("reading from stream") || readerEx.Message.Contains("connection") || readerEx.Message.Contains("timeout"))
+            {
+                throw new Exception($"SQL Server connection issue during Material Master Migration after processing {processedCount} records. " +
+                                  $"This could be due to: 1) Network connectivity issues, 2) SQL Server timeout, 3) Large dataset causing memory issues, " +
+                                  $"4) Connection string issues. Original error: {readerEx.Message}", readerEx);
+            }
+            else if (readerEx.Message.Contains("constraint") || readerEx.Message.Contains("foreign key") || readerEx.Message.Contains("violates"))
+            {
+                throw new Exception($"Database constraint violation during Material Master Migration at record {processedCount}. " +
+                                  $"This could be due to: 1) Missing reference data in UOM or MaterialGroup tables, " +
+                                  $"2) Duplicate primary keys, 3) Invalid foreign key values. Original error: {readerEx.Message}", readerEx);
+            }
+            else
+            {
+                throw new Exception($"Unexpected error during Material Master Migration at record {processedCount}: {readerEx.Message}", readerEx);
+            }
+        }
+        
         return insertedCount;
     }
 }

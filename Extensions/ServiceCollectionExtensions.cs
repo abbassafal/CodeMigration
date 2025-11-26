@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MaterialGroupMasterMigration>();
         services.AddScoped<PurchaseGroupMasterMigration>();
         services.AddScoped<PaymentTermMasterMigration>();
+        services.AddScoped<IncotermMasterMigration>();
         services.AddScoped<MaterialMasterMigration>();
         services.AddScoped<EventMasterMigration>();
         services.AddScoped<TaxMasterMigration>();

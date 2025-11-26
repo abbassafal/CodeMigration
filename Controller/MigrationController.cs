@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 
 [Route("Migration")]
 public class MigrationController : Controller
@@ -16,6 +17,7 @@ public class MigrationController : Controller
     private readonly TaxMasterMigration _taxMigration;
     private readonly UsersMasterMigration _usersmasterMigration;
     private readonly ErpPrLinesMigration _erpprlinesMigration;
+    private readonly IncotermMasterMigration _incotermMigration;
 
 
     public MigrationController(
@@ -29,7 +31,8 @@ public class MigrationController : Controller
         EventMasterMigration eventMigration,
         TaxMasterMigration taxMigration,
         UsersMasterMigration usersmasterMigration,
-        ErpPrLinesMigration erpprlinesMigration)
+        ErpPrLinesMigration erpprlinesMigration,
+         IncotermMasterMigration incotermMigration)
     {
         _uomMigration = uomMigration;
         _plantMigration = plantMigration;
@@ -42,6 +45,7 @@ public class MigrationController : Controller
         _taxMigration = taxMigration;
         _usersmasterMigration = usersmasterMigration;
         _erpprlinesMigration = erpprlinesMigration;
+        _incotermMigration = incotermMigration;
     }
 
     public IActionResult Index()
@@ -61,6 +65,7 @@ public class MigrationController : Controller
             new { name = "materialgroup", description = "TBL_MaterialGroupMaster to material_group_master" },
             new { name = "purchasegroup", description = "TBL_PurchaseGroupMaster to purchase_group_master" },
             new { name = "paymentterm", description = "TBL_PAYMENTTERMMASTER to payment_term_master" },
+            new { name = "incoterm", description = "TBL_IncotermMAST to incoterm_master" },
             new { name = "material", description = "TBL_ITEMMASTER to material_master" },
             new { name = "eventmaster", description = "TBL_EVENTMASTER to event_master + event_setting" },
             new { name = "tax", description = "TBL_TaxMaster to tax_master" },
@@ -101,6 +106,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "paymentterm")
         {
             var mappings = _paymentTermMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "incoterm")
+        {
+            var mappings = _incotermMigration.GetMappings();
             return Json(mappings);
         }
         else if (table.ToLower() == "material")
@@ -162,9 +172,56 @@ public class MigrationController : Controller
             {
                 recordCount = await _paymentTermMigration.MigrateAsync();
             }
+            else if (request.Table.ToLower() == "incoterm")
+            {
+                recordCount = await _incotermMigration.MigrateAsync();
+            }
             else if (request.Table.ToLower() == "material")
             {
-                recordCount = await _materialMigration.MigrateAsync();
+                try
+                {
+                    recordCount = await _materialMigration.MigrateAsync();
+                }
+                catch (Exception ex)
+                {
+                    // Provide specific error information for material migration
+                    string detailedError;
+                    if (ex.Message.Contains("SQL Server connection issue"))
+                    {
+                        detailedError = "Database Connection Error: " + ex.Message + 
+                                      "\n\nTroubleshooting steps:\n" +
+                                      "1. Check if SQL Server is running and accessible\n" +
+                                      "2. Verify connection string in appsettings.json\n" +
+                                      "3. Check network connectivity between application and SQL Server\n" +
+                                      "4. Ensure TBL_ITEMMASTER table exists and has data\n" +
+                                      "5. Check if the table has too many records (consider pagination)";
+                    }
+                    else if (ex.Message.Contains("constraint violation") || ex.Message.Contains("foreign key"))
+                    {
+                        detailedError = "Database Constraint Error: " + ex.Message + 
+                                      "\n\nTroubleshooting steps:\n" +
+                                      "1. Ensure UOM Master migration was completed successfully\n" +
+                                      "2. Ensure Material Group Master migration was completed successfully\n" +
+                                      "3. Check for invalid UOMId or MaterialGroupId values in TBL_ITEMMASTER\n" +
+                                      "4. Verify that all foreign key reference tables have the required data";
+                    }
+                    else
+                    {
+                        detailedError = "Material Migration Error: " + ex.Message +
+                                      "\n\nGeneral troubleshooting:\n" +
+                                      "1. Check application logs for more details\n" +
+                                      "2. Verify data integrity in source table TBL_ITEMMASTER\n" +
+                                      "3. Ensure PostgreSQL connection is stable\n" +
+                                      "4. Check for data type mismatches or invalid characters";
+                    }
+                    
+                    return Json(new { 
+                        success = false, 
+                        error = detailedError,
+                        table = "material",
+                        timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC")
+                    });
+                }
             }
             else if (request.Table.ToLower() == "eventmaster")
             {
@@ -226,6 +283,7 @@ public class MigrationController : Controller
                 _plantMigration,
                 _purchaseGroupMigration,
                 _paymentTermMigration,
+                _incotermMigration,
                 _materialMigration,
                 _taxMigration,
                 _usersmasterMigration,
@@ -268,6 +326,7 @@ public class MigrationController : Controller
             results["Plant"] = new { count = await _plantMigration.MigrateAsync(), success = true };
             results["PurchaseGroup"] = new { count = await _purchaseGroupMigration.MigrateAsync(), success = true };
             results["PaymentTerm"] = new { count = await _paymentTermMigration.MigrateAsync(), success = true };
+            results["Incoterm"] = new { count = await _incotermMigration.MigrateAsync(), success = true };
             results["Material"] = new { count = await _materialMigration.MigrateAsync(), success = true };
             results["Tax"] = new { count = await _taxMigration.MigrateAsync(), success = true };
             results["Users"] = new { count = await _usersmasterMigration.MigrateAsync(), success = true };
@@ -301,6 +360,92 @@ public class MigrationController : Controller
                 results = results,
                 timestamp = DateTime.UtcNow
             });
+        }
+    }
+
+    [HttpGet("test-connections")]
+    public async Task<IActionResult> TestConnections()
+    {
+        try
+        {
+            var diagnostics = await _materialMigration.TestConnectionsAsync();
+            return Json(new { success = true, diagnostics = diagnostics });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
+        }
+    }
+
+    [HttpGet("validate-source-data/{table}")]
+    public async Task<IActionResult> ValidateSourceData(string table)
+    {
+        try
+        {
+            var validation = new Dictionary<string, object>();
+            
+            if (table.ToLower() == "material")
+            {
+                using var sqlConn = _materialMigration.GetSqlServerConnection();
+                await sqlConn.OpenAsync();
+                
+                // Check if table exists
+                var checkTableQuery = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'TBL_ITEMMASTER'";
+                using var checkCmd = new SqlCommand(checkTableQuery, sqlConn);
+                var tableExists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
+                
+                validation["TableExists"] = tableExists;
+                
+                if (tableExists)
+                {
+                    // Get total record count
+                    var countQuery = "SELECT COUNT(*) FROM TBL_ITEMMASTER";
+                    using var countCmd = new SqlCommand(countQuery, sqlConn);
+                    validation["TotalRecords"] = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+                    
+                    // Check for problematic records
+                    var problemsQuery = @"
+                        SELECT 
+                            COUNT(*) as TotalRecords,
+                            SUM(CASE WHEN ITEMCODE IS NULL OR ITEMCODE = '' THEN 1 ELSE 0 END) as NullItemCodes,
+                            SUM(CASE WHEN UOMId IS NULL OR UOMId = 0 THEN 1 ELSE 0 END) as NullUOMIds,
+                            SUM(CASE WHEN MaterialGroupId IS NULL OR MaterialGroupId = 0 THEN 1 ELSE 0 END) as NullMaterialGroupIds,
+                            SUM(CASE WHEN ClientSAPId IS NULL THEN 1 ELSE 0 END) as NullClientSAPIds
+                        FROM TBL_ITEMMASTER";
+                    
+                    using var problemsCmd = new SqlCommand(problemsQuery, sqlConn);
+                    using var reader = await problemsCmd.ExecuteReaderAsync();
+                    
+                    if (await reader.ReadAsync())
+                    {
+                        validation["DataQuality"] = new
+                        {
+                            TotalRecords = reader["TotalRecords"],
+                            Issues = new
+                            {
+                                NullItemCodes = reader["NullItemCodes"],
+                                NullUOMIds = reader["NullUOMIds"],
+                                NullMaterialGroupIds = reader["NullMaterialGroupIds"],
+                                NullClientSAPIds = reader["NullClientSAPIds"]
+                            }
+                        };
+                    }
+                }
+                else
+                {
+                    validation["Error"] = "Source table TBL_ITEMMASTER does not exist";
+                }
+            }
+            else
+            {
+                validation["Error"] = $"Validation not implemented for table: {table}";
+            }
+            
+            return Json(new { success = true, validation = validation });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
         }
     }
 }
