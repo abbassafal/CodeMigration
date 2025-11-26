@@ -1,5 +1,6 @@
 using Extensions;
 using Microsoft.AspNetCore.DataProtection;
+using DataMigration.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,10 @@ builder.Services.AddDataProtection()
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+// Add SignalR for real-time progress updates
+builder.Services.AddSignalR();
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(builder =>
@@ -49,6 +54,9 @@ app.UseAuthorization();
 
 // Map controllers
 app.MapControllers();
+
+// Map SignalR hubs
+app.MapHub<MigrationProgressHub>("/migrationProgressHub");
 
 // Default route to Migration/Index
 app.MapControllerRoute(
