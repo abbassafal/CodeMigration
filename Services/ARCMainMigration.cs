@@ -34,9 +34,8 @@ public class ARCMainMigration : MigrationService
             m.CreatedDate,
             m.UpdatedBy,
             m.UpdatedDate,
-            s.CurrencyId
-        FROM TBL_ARCMain m
-        LEFT JOIN TBL_ARCSub s ON s.ARCMainId = m.ARCMainId";
+            (SELECT TOP 1 CurrencyId FROM TBL_ARCSub WHERE ARCMainId = m.ARCMainId) AS CurrencyId
+        FROM TBL_ARCMain m";
 
     protected override string InsertQuery => @"
         INSERT INTO arc_header (
@@ -168,7 +167,10 @@ public class ARCMainMigration : MigrationService
             {
                 pgCmd.Parameters.Clear();
 
-                pgCmd.Parameters.AddWithValue("@arc_header_id", reader["ARCMainId"] ?? DBNull.Value);
+                var arcMainId = reader["ARCMainId"];
+                Console.WriteLine($"Processing ARCMainId: {arcMainId}");
+
+                pgCmd.Parameters.AddWithValue("@arc_header_id", arcMainId ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@arc_name", reader["ARCName"] ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@arc_number", reader["ARCNo"] ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@arc_description", reader["ARCDescription"] ?? DBNull.Value);
@@ -196,8 +198,19 @@ public class ARCMainMigration : MigrationService
                 pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value);
 
+                Console.WriteLine($"Executing INSERT for ARCMainId: {arcMainId}");
                 int result = await pgCmd.ExecuteNonQueryAsync();
-                if (result > 0) insertedCount++;
+                Console.WriteLine($"Insert result for ARCMainId {arcMainId}: {result} row(s) affected");
+                
+                if (result > 0) 
+                {
+                    insertedCount++;
+                    Console.WriteLine($"✓ Successfully inserted ARCMainId: {arcMainId}");
+                }
+                else
+                {
+                    Console.WriteLine($"⚠️  Warning: INSERT returned 0 rows for ARCMainId: {arcMainId}");
+                }
             }
             catch (Exception ex)
             {
