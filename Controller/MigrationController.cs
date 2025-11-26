@@ -44,8 +44,7 @@ public class MigrationController : Controller
         UsersMasterMigration usersmasterMigration,
         ErpPrLinesMigration erpprlinesMigration,
         IncotermMasterMigration incotermMigration,
-        IHubContext<MigrationProgressHub> hubContext)
-        ErpPrLinesMigration erpprlinesMigration,
+        IHubContext<MigrationProgressHub> hubContext,
         ARCMainMigration arcMainMigration,
         TaxCodeMasterMigration taxCodeMasterMigration,
         CompanyMasterMigration companyMasterMigration)
