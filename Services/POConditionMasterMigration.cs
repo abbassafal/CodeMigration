@@ -86,6 +86,12 @@ public class POConditionMasterMigration : MigrationService
                     var clientSAPId = reader.IsDBNull(reader.GetOrdinal("ClientSAPId")) ? 0 : Convert.ToInt32(reader["ClientSAPId"]);
 
                     // Validate required fields
+                    if (reader.IsDBNull(reader.GetOrdinal("ClientSAPId")) || clientSAPId == 0)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount} (POConditionTypeId: {poConditionTypeId}) - ClientSAPId is null or zero");
+                        continue;
+                    }
+
                     if (string.IsNullOrWhiteSpace(poConditionTypeCode))
                     {
                         Console.WriteLine($"Skipping record {processedCount} (POConditionTypeId: {poConditionTypeId}) - POConditionTypeCode is null or empty");
@@ -99,35 +105,7 @@ public class POConditionMasterMigration : MigrationService
                     }
 
                     // Lookup po_doc_type_id from po_doc_type_master table based on POType
-                    int? poDocTypeId = null;
-                    if (!string.IsNullOrWhiteSpace(poType))
-                    {
-                        using var lookupCmd = new NpgsqlCommand(
-                            "SELECT po_doc_type_id FROM po_doc_type_master WHERE po_doc_type_code = @po_type AND company_id = @company_id", 
-                            pgConn);
-                        if (transaction != null)
-                        {
-                            lookupCmd.Transaction = transaction;
-                        }
-                        lookupCmd.Parameters.AddWithValue("@po_type", poType);
-                        lookupCmd.Parameters.AddWithValue("@company_id", clientSAPId);
-
-                        var lookupResult = await lookupCmd.ExecuteScalarAsync();
-                        if (lookupResult != null && lookupResult != DBNull.Value)
-                        {
-                            poDocTypeId = Convert.ToInt32(lookupResult);
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Warning: PO Document Type '{poType}' not found in po_doc_type_master for record {processedCount} (POConditionTypeId: {poConditionTypeId}). Skipping record.");
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Skipping record {processedCount} (POConditionTypeId: {poConditionTypeId}) - POType is null or empty");
-                        continue;
-                    }
+                    int? poDocTypeId = 1;
 
                     pgCmd.Parameters.Clear();
                     pgCmd.Parameters.AddWithValue("@po_condition_id", poConditionTypeId);
