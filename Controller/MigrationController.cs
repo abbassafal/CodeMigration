@@ -51,6 +51,8 @@ public class MigrationController : Controller
         UsersMasterMigration usersmasterMigration,
         ErpPrLinesMigration erpprlinesMigration,
         IncotermMasterMigration incotermMigration,
+        PODocTypeMasterMigration poDocTypeMigration,
+        POConditionMasterMigration poConditionMigration,
         IHubContext<MigrationProgressHub> hubContext,
         ARCMainMigration arcMainMigration,
         TaxCodeMasterMigration taxCodeMasterMigration,
