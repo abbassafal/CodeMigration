@@ -24,6 +24,8 @@ public class MigrationController : Controller
     private readonly UsersMasterMigration _usersmasterMigration;
     private readonly ErpPrLinesMigration _erpprlinesMigration;
     private readonly IncotermMasterMigration _incotermMigration;
+    private readonly PODocTypeMasterMigration _poDocTypeMigration;
+    private readonly POConditionMasterMigration _poConditionMigration;
     private readonly IHubContext<MigrationProgressHub> _hubContext;
     private readonly ARCMainMigration _arcMainMigration;
     private readonly TaxCodeMasterMigration _taxCodeMasterMigration;
@@ -72,6 +74,8 @@ public class MigrationController : Controller
         _usersmasterMigration = usersmasterMigration;
         _erpprlinesMigration = erpprlinesMigration;
         _incotermMigration = incotermMigration;
+        _poDocTypeMigration = poDocTypeMigration;
+        _poConditionMigration = poConditionMigration;
         _hubContext = hubContext;
         _arcMainMigration = arcMainMigration;
         _taxCodeMasterMigration = taxCodeMasterMigration;
@@ -413,7 +417,9 @@ public class MigrationController : Controller
                 _materialMigration,
                 _taxMigration,
                 _usersmasterMigration,
-                _erpprlinesMigration
+                _erpprlinesMigration,
+                _poDocTypeMigration,
+                _poConditionMigration
             };
 
             var (totalMigrated, results) = await MigrationService.MigrateMultipleAsync(migrationServices, useCommonTransaction: true);
