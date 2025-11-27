@@ -28,6 +28,9 @@ public class MigrationController : Controller
     private readonly ARCMainMigration _arcMainMigration;
     private readonly TaxCodeMasterMigration _taxCodeMasterMigration;
     private readonly CompanyMasterMigration _companyMasterMigration;
+    private readonly PurchaseOrganizationMasterMigration _purchaseOrganizationMigration;
+    private readonly ValuationTypeMasterMigration _valuationTypeMigration;
+    private readonly TypeOfCategoryMasterMigration _typeOfCategoryMigration;
 
 
     public MigrationController(
@@ -47,7 +50,10 @@ public class MigrationController : Controller
         IHubContext<MigrationProgressHub> hubContext,
         ARCMainMigration arcMainMigration,
         TaxCodeMasterMigration taxCodeMasterMigration,
-        CompanyMasterMigration companyMasterMigration)
+        CompanyMasterMigration companyMasterMigration,
+        PurchaseOrganizationMasterMigration purchaseOrganizationMigration,
+        ValuationTypeMasterMigration valuationTypeMigration,
+        TypeOfCategoryMasterMigration typeOfCategoryMigration)
     {
         _uomMigration = uomMigration;
         _plantMigration = plantMigration;
@@ -66,6 +72,9 @@ public class MigrationController : Controller
         _arcMainMigration = arcMainMigration;
         _taxCodeMasterMigration = taxCodeMasterMigration;
         _companyMasterMigration = companyMasterMigration;
+        _purchaseOrganizationMigration = purchaseOrganizationMigration;
+        _valuationTypeMigration = valuationTypeMigration;
+        _typeOfCategoryMigration = typeOfCategoryMigration;
     }
 
     public IActionResult Index()
@@ -95,6 +104,9 @@ public class MigrationController : Controller
             new { name = "arcmain", description = "TBL_ARCMain to arc_header" },
             new { name = "taxcodemaster", description = "TBL_TAXCODEMASTER to tax_code_master" },
             new { name = "companymaster", description = "TBL_CLIENTSAPMASTER to company_master" },
+            new { name = "purchaseorganization", description = "TBL_PurchaseOrgMaster to purchase_organization_master" },
+            new { name = "valuationtype", description = "tbl_ValuationMaster to valuation_type_master" },
+            new { name = "typeofcategory", description = "TBL_TypeOfCategory to type_of_category_master" },
         };
         return Json(tables);
     }
@@ -180,6 +192,21 @@ public class MigrationController : Controller
         else if (table.ToLower() == "companymaster")
         {
             var mappings = _companyMasterMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "purchaseorganization")
+        {
+            var mappings = _purchaseOrganizationMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "valuationtype")
+        {
+            var mappings = _valuationTypeMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "typeofcategory")
+        {
+            var mappings = _typeOfCategoryMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -316,6 +343,18 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "companymaster")
             {
                 recordCount = await _companyMasterMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "purchaseorganization")
+            {
+                recordCount = await _purchaseOrganizationMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "valuationtype")
+            {
+                recordCount = await _valuationTypeMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "typeofcategory")
+            {
+                recordCount = await _typeOfCategoryMigration.MigrateAsync();
             }
             else
             {

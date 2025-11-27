@@ -23,6 +23,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ARCMainMigration>();
         services.AddScoped<TaxCodeMasterMigration>();
         services.AddScoped<CompanyMasterMigration>();
+        services.AddScoped<PurchaseOrganizationMasterMigration>();
+        services.AddScoped<ValuationTypeMasterMigration>();
+        services.AddScoped<TypeOfCategoryMasterMigration>();
 
         return services;
     }
