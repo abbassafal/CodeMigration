@@ -24,6 +24,8 @@ public class MigrationController : Controller
     private readonly UsersMasterMigration _usersmasterMigration;
     private readonly ErpPrLinesMigration _erpprlinesMigration;
     private readonly IncotermMasterMigration _incotermMigration;
+    private readonly PODocTypeMasterMigration _poDocTypeMigration;
+    private readonly POConditionMasterMigration _poConditionMigration;
     private readonly IHubContext<MigrationProgressHub> _hubContext;
 
 
@@ -41,6 +43,8 @@ public class MigrationController : Controller
         UsersMasterMigration usersmasterMigration,
         ErpPrLinesMigration erpprlinesMigration,
         IncotermMasterMigration incotermMigration,
+        PODocTypeMasterMigration poDocTypeMigration,
+        POConditionMasterMigration poConditionMigration,
         IHubContext<MigrationProgressHub> hubContext)
     {
         _uomMigration = uomMigration;
@@ -56,6 +60,8 @@ public class MigrationController : Controller
         _usersmasterMigration = usersmasterMigration;
         _erpprlinesMigration = erpprlinesMigration;
         _incotermMigration = incotermMigration;
+        _poDocTypeMigration = poDocTypeMigration;
+        _poConditionMigration = poConditionMigration;
         _hubContext = hubContext;
     }
 
@@ -83,6 +89,8 @@ public class MigrationController : Controller
             new { name = "tax", description = "TBL_TaxMaster to tax_master" },
             new { name = "users", description = "TBL_USERMASTERFINAL to users" },
             new { name = "erpprlines", description = "TBL_PRTRANSACTION to erp_pr_lines" },
+            new { name = "podoctype", description = "TBL_PO_DOC_TYPE to po_doc_type_master" },
+            new { name = "pocondition", description = "TBL_POConditionTypeMaster to po_condition_master" },
         };
         return Json(tables);
     }
@@ -153,6 +161,16 @@ public class MigrationController : Controller
         else if (table.ToLower() == "erp_pr_lines")
         {
             var mappings = _erpprlinesMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "podoctype")
+        {
+            var mappings = _poDocTypeMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "pocondition")
+        {
+            var mappings = _poConditionMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -278,6 +296,14 @@ public class MigrationController : Controller
             {
                 recordCount = await _erpprlinesMigration.MigrateAsync();
             }
+            else if (request.Table.ToLower() == "podoctype")
+            {
+                recordCount = await _poDocTypeMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "pocondition")
+            {
+                recordCount = await _poConditionMigration.MigrateAsync();
+            }
             else
             {
                 return Json(new { success = false, error = "Unknown table" });
@@ -309,7 +335,9 @@ public class MigrationController : Controller
                 _materialMigration,
                 _taxMigration,
                 _usersmasterMigration,
-                _erpprlinesMigration
+                _erpprlinesMigration,
+                _poDocTypeMigration,
+                _poConditionMigration
             };
 
             var (totalMigrated, results) = await MigrationService.MigrateMultipleAsync(migrationServices, useCommonTransaction: true);

@@ -20,6 +20,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TaxMasterMigration>();
         services.AddScoped<UsersMasterMigration>();
         services.AddScoped<ErpPrLinesMigration>();
+        services.AddScoped<PODocTypeMasterMigration>();
+        services.AddScoped<POConditionMasterMigration>();
 
         return services;
     }
