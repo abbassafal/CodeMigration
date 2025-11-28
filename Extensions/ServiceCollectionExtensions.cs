@@ -20,14 +20,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TaxMasterMigration>();
         services.AddScoped<UsersMasterMigration>();
         services.AddScoped<ErpPrLinesMigration>();
-        services.AddScoped<ARCMainMigration>();
-        services.AddScoped<TaxCodeMasterMigration>();
-        services.AddScoped<CompanyMasterMigration>();
-        services.AddScoped<PurchaseOrganizationMasterMigration>();
-        services.AddScoped<ValuationTypeMasterMigration>();
-        services.AddScoped<TypeOfCategoryMasterMigration>();
-        services.AddScoped<SupplierGroupMasterMigration>();
-        services.AddScoped<SupplierMasterMigration>();
+        services.AddScoped<PODocTypeMasterMigration>();
+        services.AddScoped<POConditionMasterMigration>();
+        services.AddScoped<WorkflowMasterMigration>();
+        services.AddScoped<WorkflowMasterHistoryMigration>();
+        services.AddScoped<WorkflowAmountMigration>();
+        services.AddScoped<WorkflowAmountHistoryMigration>();
+        services.AddScoped<WorkflowApprovalUserMigration>();
+        services.AddScoped<WorkflowApprovalUserHistoryMigration>();
 
         return services;
     }

@@ -804,3 +804,4 @@ python/db_config.py
 python/.env
 python/config/*.ini
 python/config/*.conf
+appsettings.json

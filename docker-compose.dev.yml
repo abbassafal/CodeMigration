@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile.dev
     container_name: datamigration-dev
     ports:
-      - "5000:8080"  # Access via: http://localhost:5000/Migration
+      - "5050:8080"  # Access via: http://localhost:5050/Migration
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
@@ -14,10 +14,6 @@ services:
       # Reduce logging noise
       - Logging__LogLevel__Microsoft.AspNetCore.DataProtection=Error
       - Logging__LogLevel__Microsoft.AspNetCore.Hosting=Error
-
-      # Connection Strings - Update these with your actual connection strings
-      - ConnectionStrings__SqlServer=Server=192.168.3.250,1433;Database=predebug;User Id=qa;Password=admin@123;TrustServerCertificate=True;
-      - ConnectionStrings__PostgreSql=Host=navikaran21112025.cpai22qoqeyo.ap-south-1.rds.amazonaws.com;Database=navikaran_mig;Username=postgres;Password=3K:]NsC2sCY>e279>dTmzo$$iTf:8;Include Error Detail=true;
     restart: unless-stopped
     networks:
       - migration-network

@@ -26,6 +26,12 @@ public class MigrationController : Controller
     private readonly IncotermMasterMigration _incotermMigration;
     private readonly PODocTypeMasterMigration _poDocTypeMigration;
     private readonly POConditionMasterMigration _poConditionMigration;
+    private readonly WorkflowMasterMigration _workflowMigration;
+    private readonly WorkflowMasterHistoryMigration _workflowHistoryMigration;
+    private readonly WorkflowAmountMigration _workflowAmountMigration;
+    private readonly WorkflowAmountHistoryMigration _workflowAmountHistoryMigration;
+    private readonly WorkflowApprovalUserMigration _workflowApprovalUserMigration;
+    private readonly WorkflowApprovalUserHistoryMigration _workflowApprovalUserHistoryMigration;
     private readonly IHubContext<MigrationProgressHub> _hubContext;
     private readonly ARCMainMigration _arcMainMigration;
     private readonly TaxCodeMasterMigration _taxCodeMasterMigration;
@@ -53,15 +59,13 @@ public class MigrationController : Controller
         IncotermMasterMigration incotermMigration,
         PODocTypeMasterMigration poDocTypeMigration,
         POConditionMasterMigration poConditionMigration,
-        IHubContext<MigrationProgressHub> hubContext,
-        ARCMainMigration arcMainMigration,
-        TaxCodeMasterMigration taxCodeMasterMigration,
-        CompanyMasterMigration companyMasterMigration,
-        PurchaseOrganizationMasterMigration purchaseOrganizationMigration,
-        ValuationTypeMasterMigration valuationTypeMigration,
-        TypeOfCategoryMasterMigration typeOfCategoryMigration,
-        SupplierGroupMasterMigration supplierGroupMigration,
-        SupplierMasterMigration supplierMigration)
+        WorkflowMasterMigration workflowMigration,
+        WorkflowMasterHistoryMigration workflowHistoryMigration,
+        WorkflowAmountMigration workflowAmountMigration,
+        WorkflowAmountHistoryMigration workflowAmountHistoryMigration,
+        WorkflowApprovalUserMigration workflowApprovalUserMigration,
+        WorkflowApprovalUserHistoryMigration workflowApprovalUserHistoryMigration,
+        IHubContext<MigrationProgressHub> hubContext)
     {
         _uomMigration = uomMigration;
         _plantMigration = plantMigration;
@@ -78,6 +82,12 @@ public class MigrationController : Controller
         _incotermMigration = incotermMigration;
         _poDocTypeMigration = poDocTypeMigration;
         _poConditionMigration = poConditionMigration;
+        _workflowMigration = workflowMigration;
+        _workflowHistoryMigration = workflowHistoryMigration;
+        _workflowAmountMigration = workflowAmountMigration;
+        _workflowAmountHistoryMigration = workflowAmountHistoryMigration;
+        _workflowApprovalUserMigration = workflowApprovalUserMigration;
+        _workflowApprovalUserHistoryMigration = workflowApprovalUserHistoryMigration;
         _hubContext = hubContext;
         _arcMainMigration = arcMainMigration;
         _taxCodeMasterMigration = taxCodeMasterMigration;
@@ -113,14 +123,14 @@ public class MigrationController : Controller
             new { name = "tax", description = "TBL_TaxMaster to tax_master" },
             new { name = "users", description = "TBL_USERMASTERFINAL to users" },
             new { name = "erpprlines", description = "TBL_PRTRANSACTION to erp_pr_lines" },
-            new { name = "arcmain", description = "TBL_ARCMain to arc_header" },
-            new { name = "taxcodemaster", description = "TBL_TAXCODEMASTER to tax_code_master" },
-            new { name = "companymaster", description = "TBL_CLIENTSAPMASTER to company_master" },
-            new { name = "purchaseorganization", description = "TBL_PurchaseOrgMaster to purchase_organization_master" },
-            new { name = "valuationtype", description = "tbl_ValuationMaster to valuation_type_master" },
-            new { name = "typeofcategory", description = "TBL_TypeOfCategory to type_of_category_master" },
-            new { name = "suppliergroup", description = "TBL_VendorGroupMaster to supplier_groupmaster" },
-            new { name = "supplier", description = "TBL_VENDORMASTERNEW to supplier_master" },
+            new { name = "podoctype", description = "TBL_PO_DOC_TYPE to po_doc_type_master" },
+            new { name = "pocondition", description = "TBL_POConditionTypeMaster to po_condition_master" },
+            new { name = "workflow", description = "TBL_WorkFlowMain to workflow_master" },
+            new { name = "workflowhistory", description = "TBL_WorkFlowMain_History to workflow_master_history" },
+            new { name = "workflowamount", description = "TBL_WorkFlowSub to workflow_amount" },
+            new { name = "workflowamounthistory", description = "TBL_WorkFlowSub_History to workflow_amount_history" },
+            new { name = "workflowapprovaluser", description = "TBL_WorkFlowSubSub to workflow_approval_user" },
+            new { name = "workflowapprovaluserhistory", description = "TBL_WorkFlowSubSub_History to workflow_approval_user_history" },
         };
         return Json(tables);
     }
@@ -231,6 +241,36 @@ public class MigrationController : Controller
         else if (table.ToLower() == "supplier")
         {
             var mappings = _supplierMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "workflow")
+        {
+            var mappings = _workflowMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "workflowhistory")
+        {
+            var mappings = _workflowHistoryMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "workflowamount")
+        {
+            var mappings = _workflowAmountMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "workflowamounthistory")
+        {
+            var mappings = _workflowAmountHistoryMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "workflowapprovaluser")
+        {
+            var mappings = _workflowApprovalUserMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "workflowapprovaluserhistory")
+        {
+            var mappings = _workflowApprovalUserHistoryMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -388,6 +428,30 @@ public class MigrationController : Controller
             {
                 recordCount = await _supplierMigration.MigrateAsync();
             }
+            else if (request.Table.ToLower() == "workflow")
+            {
+                recordCount = await _workflowMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "workflowhistory")
+            {
+                recordCount = await _workflowHistoryMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "workflowamount")
+            {
+                recordCount = await _workflowAmountMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "workflowamounthistory")
+            {
+                recordCount = await _workflowAmountHistoryMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "workflowapprovaluser")
+            {
+                recordCount = await _workflowApprovalUserMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "workflowapprovaluserhistory")
+            {
+                recordCount = await _workflowApprovalUserHistoryMigration.MigrateAsync();
+            }
             else
             {
                 return Json(new { success = false, error = "Unknown table" });
@@ -398,6 +462,41 @@ public class MigrationController : Controller
         catch (Exception ex)
         {
             return Json(new { success = false, error = ex.Message });
+        }
+    }
+
+    [HttpPost("MigrateDebugAsync")]
+    public async Task<IActionResult> MigrateDebugAsync([FromBody] MigrationRequest request)
+    {
+        try
+        {   
+            int recordCount = 0;
+            if (request.Table.ToLower() == "workflowamount")
+            {
+                recordCount = await _workflowAmountMigration.MigrateWithoutTransactionAsync();
+            }
+            else if (request.Table.ToLower() == "workflowamounthistory")
+            {
+                recordCount = await _workflowAmountHistoryMigration.MigrateAsync(); // Will need to add debug method
+            }
+            else if (request.Table.ToLower() == "workflowapprovaluser")
+            {
+                recordCount = await _workflowApprovalUserMigration.MigrateAsync(); // Will need to add debug method
+            }
+            else if (request.Table.ToLower() == "workflowapprovaluserhistory")
+            {
+                recordCount = await _workflowApprovalUserHistoryMigration.MigrateAsync(); // Will need to add debug method
+            }
+            else
+            {
+                return Json(new { success = false, error = "Debug migration not available for this table" });
+            }
+            
+            return Json(new { success = true, message = $"Debug migration completed for {request.Table}. {recordCount} records migrated." });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message, stackTrace = ex.StackTrace });
         }
     }
 
@@ -421,7 +520,13 @@ public class MigrationController : Controller
                 _usersmasterMigration,
                 _erpprlinesMigration,
                 _poDocTypeMigration,
-                _poConditionMigration
+                _poConditionMigration,
+                _workflowMigration,
+                _workflowHistoryMigration,
+                _workflowAmountMigration,
+                _workflowAmountHistoryMigration,
+                _workflowApprovalUserMigration,
+                _workflowApprovalUserHistoryMigration
             };
 
             var (totalMigrated, results) = await MigrationService.MigrateMultipleAsync(migrationServices, useCommonTransaction: true);
@@ -466,6 +571,14 @@ public class MigrationController : Controller
             results["Tax"] = new { count = await _taxMigration.MigrateAsync(), success = true };
             results["Users"] = new { count = await _usersmasterMigration.MigrateAsync(), success = true };
             results["ErpPrLines"] = new { count = await _erpprlinesMigration.MigrateAsync(), success = true };
+            results["PODocType"] = new { count = await _poDocTypeMigration.MigrateAsync(), success = true };
+            results["POCondition"] = new { count = await _poConditionMigration.MigrateAsync(), success = true };
+            results["Workflow"] = new { count = await _workflowMigration.MigrateAsync(), success = true };
+            results["WorkflowHistory"] = new { count = await _workflowHistoryMigration.MigrateAsync(), success = true };
+            results["WorkflowAmount"] = new { count = await _workflowAmountMigration.MigrateAsync(), success = true };
+            results["WorkflowAmountHistory"] = new { count = await _workflowAmountHistoryMigration.MigrateAsync(), success = true };
+            results["WorkflowApprovalUser"] = new { count = await _workflowApprovalUserMigration.MigrateAsync(), success = true };
+            results["WorkflowApprovalUserHistory"] = new { count = await _workflowApprovalUserHistoryMigration.MigrateAsync(), success = true };
 
             // Handle EventMaster separately due to its different return type
             var eventResult = await _eventMigration.MigrateAsync();
@@ -719,6 +832,97 @@ public class MigrationController : Controller
         return View("OptimizedProgress");
     }
 
+    [HttpGet("validate-workflow-data/{table}")]
+    public async Task<IActionResult> ValidateWorkflowData(string table)
+    {
+        try
+        {
+            object validation;
+            
+            if (table.ToLower() == "workflowamount")
+            {
+                validation = await _workflowAmountMigration.ValidateSourceDataAsync();
+            }
+            else
+            {
+                return Json(new { success = false, error = "Validation not available for this table" });
+            }
+            
+            return Json(new { success = true, validation = validation });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
+        }
+    }
+
+    [HttpGet("validate-workflow-constraints")]
+    public async Task<IActionResult> ValidateWorkflowConstraints()
+    {
+        try
+        {
+            var validation = await _workflowAmountMigration.ValidateForeignKeyConstraintsAsync();
+            return Json(new { success = true, validation = validation });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
+        }
+    }
+
+    [HttpPost("migrate-workflow-without-transaction")]
+    public async Task<IActionResult> MigrateWorkflowWithoutTransaction()
+    {
+        try
+        {
+            var recordCount = await _workflowAmountMigration.MigrateWithoutTransactionAsync();
+            return Json(new { success = true, message = $"Workflow amount migration completed without transaction. {recordCount} records migrated." });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
+        }
+    }
+
+    [HttpGet("validate-workflow-amount")]
+    public async Task<IActionResult> ValidateWorkflowAmount()
+    {
+        try
+        {
+            var sourceValidation = await _workflowAmountMigration.ValidateSourceDataAsync();
+            var foreignKeyValidation = await _workflowAmountMigration.ValidateForeignKeyConstraintsAsync();
+            var numericAnalysis = await _workflowAmountMigration.AnalyzeNumericFieldIssuesAsync();
+            var tableSchema = await _workflowAmountMigration.GetTargetTableSchemaAsync();
+            
+            return Json(new 
+            { 
+                success = true, 
+                sourceValidation = sourceValidation,
+                foreignKeyValidation = foreignKeyValidation,
+                numericAnalysis = numericAnalysis,
+                tableSchema = tableSchema,
+                timestamp = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
+        }
+    }
+
+    [HttpPost("migrate-workflow-amount-no-transaction")]
+    public async Task<IActionResult> MigrateWorkflowAmountNoTransaction()
+    {
+        try
+        {
+            var recordCount = await _workflowAmountMigration.MigrateWithoutTransactionAsync();
+            return Json(new { success = true, message = $"WorkflowAmount migration completed without transaction. {recordCount} records migrated." });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
+        }
+    }
 }
 public class MigrationRequest
 {
