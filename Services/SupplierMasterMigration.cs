@@ -164,7 +164,7 @@ public class SupplierMasterMigration : MigrationService
             new { source = "VendorCode", logic = "VendorCode -> supplier_code (Direct)", target = "supplier_code" },
             new { source = "VendorName", logic = "VendorName -> supplier_name (Direct)", target = "supplier_name" },
             // VendorType should map StatusVendor to supplier_type
-            new { source = "VendorType", logic = "VendorType -> StatusVendor (From StatusVendor)", target = "supplier_type" },
+            new { source = "StatusVendor", logic = "StatusVendor -> supplier_type (From StatusVendor)", target = "supplier_type" },
             new { source = "Primary_Contact_Person", logic = "Primary_Contact_Person -> contact_name (Direct)", target = "contact_name" },
             new { source = "PANNo", logic = "PANNo -> pan_card_number (Direct)", target = "pan_card_number" },
             new { source = "GSTNo", logic = "GSTNo -> gst_number (Direct)", target = "gst_number" },
@@ -348,7 +348,7 @@ public class SupplierMasterMigration : MigrationService
             var vendorCode = reader.IsDBNull(reader.GetOrdinal("VendorCode")) ? "" : reader["VendorCode"].ToString();
             var vendorName = reader.IsDBNull(reader.GetOrdinal("VendorName")) ? "" : reader["VendorName"].ToString();
             // VendorType should show StatusVendor value from MSSQL column
-            var vendorType = reader.IsDBNull(reader.GetOrdinal("VendorType")) ? "" : reader["StatusVendor"].ToString();
+            var vendorType = reader.IsDBNull(reader.GetOrdinal("StatusVendor")) ? "" : reader["StatusVendor"].ToString();
             var contactPerson = reader.IsDBNull(reader.GetOrdinal("Primary_Contact_Person")) ? "" : reader["Primary_Contact_Person"].ToString();
             var panNo = reader.IsDBNull(reader.GetOrdinal("PANNo")) ? "" : reader["PANNo"].ToString();
             var gstNo = reader.IsDBNull(reader.GetOrdinal("GSTNo")) ? "" : reader["GSTNo"].ToString();

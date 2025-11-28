@@ -42,6 +42,8 @@ public class MigrationController : Controller
     private readonly SupplierGroupMasterMigration _supplierGroupMigration;
     private readonly SupplierMasterMigration _supplierMigration;
 
+    private readonly SupplierPaymentIncotermMigration _supplierPaymentIncotermMigration;
+
 
     public MigrationController(
         UOMMasterMigration uomMigration,
@@ -73,7 +75,8 @@ public class MigrationController : Controller
         ValuationTypeMasterMigration valuationTypeMigration,
         TypeOfCategoryMasterMigration typeOfCategoryMigration,
         SupplierGroupMasterMigration supplierGroupMigration,
-        SupplierMasterMigration supplierMigration
+        SupplierMasterMigration supplierMigration,
+        SupplierPaymentIncotermMigration supplierPaymentIncotermMigration
     )
     {
         _uomMigration = uomMigration;
@@ -106,6 +109,8 @@ public class MigrationController : Controller
         _typeOfCategoryMigration = typeOfCategoryMigration;
         _supplierGroupMigration = supplierGroupMigration;
         _supplierMigration = supplierMigration;
+        _supplierPaymentIncotermMigration = supplierPaymentIncotermMigration;
+        
     }
 
     public IActionResult Index()
@@ -137,6 +142,7 @@ public class MigrationController : Controller
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
             new { name = "suppliergroup", description = "TBL_SupplierGroupMaster to supplier_group_master" },
             new { name = "supplier", description = "TBL_SupplierMaster to supplier_master" },
+            new { name = "supplierpaymentincoterm", description = "TBL_Vendor_Pay_Inco_Terms to supplier_payment_incoterm" },
             new { name = "users", description = "TBL_USERMASTERFINAL to users" },
             new { name = "erpprlines", description = "TBL_PRTRANSACTION to erp_pr_lines" },
             new { name = "podoctype", description = "TBL_PO_DOC_TYPE to po_doc_type_master" },
@@ -287,6 +293,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "workflowapprovaluserhistory")
         {
             var mappings = _workflowApprovalUserHistoryMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierpaymentincoterm")
+        {
+            var mappings = _supplierPaymentIncotermMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -467,6 +478,10 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "workflowapprovaluserhistory")
             {
                 recordCount = await _workflowApprovalUserHistoryMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierpaymentincoterm")
+            {
+                recordCount = await _supplierPaymentIncotermMigration.MigrateAsync();
             }
             else
             {
