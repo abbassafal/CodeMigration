@@ -486,7 +486,7 @@ public class SupplierMasterMigration : MigrationService
                 new NpgsqlParameter($"@{paramPrefix}_supplier_id", NpgsqlTypes.NpgsqlDbType.Integer) { Value = record.SupplierId },
                 new NpgsqlParameter($"@{paramPrefix}_supplier_code", NpgsqlTypes.NpgsqlDbType.Text) { Value = record.SupplierCode },
                 new NpgsqlParameter($"@{paramPrefix}_supplier_name", NpgsqlTypes.NpgsqlDbType.Text) { Value = record.SupplierName },
-                new NpgsqlParameter($"@{paramPrefix}_supplier_type", NpgsqlTypes.NpgsqlDbType.Text) { Value = record.SupplierType },
+                new NpgsqlParameter($"@{paramPrefix}_supplier_type", NpgsqlTypes.NpgsqlDbType.Text) { Value = record.Status },
                 new NpgsqlParameter($"@{paramPrefix}_contact_name", NpgsqlTypes.NpgsqlDbType.Text) { Value = record.ContactName },
                 new NpgsqlParameter($"@{paramPrefix}_pan_card_number", NpgsqlTypes.NpgsqlDbType.Text) { Value = record.PanCardNumber },
                 new NpgsqlParameter($"@{paramPrefix}_gst_number", NpgsqlTypes.NpgsqlDbType.Text) { Value = record.GstNumber },
@@ -507,7 +507,7 @@ public class SupplierMasterMigration : MigrationService
                 new NpgsqlParameter($"@{paramPrefix}_is_deleted", NpgsqlTypes.NpgsqlDbType.Boolean) { Value = false },
                 new NpgsqlParameter($"@{paramPrefix}_deleted_by", NpgsqlTypes.NpgsqlDbType.Integer) { Value = DBNull.Value },
                 new NpgsqlParameter($"@{paramPrefix}_deleted_date", NpgsqlTypes.NpgsqlDbType.TimestampTz) { Value = DBNull.Value },
-                new NpgsqlParameter($"@{paramPrefix}_status", NpgsqlTypes.NpgsqlDbType.Text) { Value = record.Status }
+                new NpgsqlParameter($"@{paramPrefix}_status", NpgsqlTypes.NpgsqlDbType.Text) { Value = "Active" }
             });
         }
 
