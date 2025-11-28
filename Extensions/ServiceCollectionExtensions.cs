@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<POConditionMasterMigration>();
         services.AddScoped<WorkflowMasterMigration>();
         services.AddScoped<WorkflowMasterHistoryMigration>();
+        services.AddScoped<WorkflowHistoryMigration>();
         services.AddScoped<WorkflowAmountMigration>();
         services.AddScoped<WorkflowAmountHistoryMigration>();
         services.AddScoped<WorkflowApprovalUserMigration>();

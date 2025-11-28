@@ -28,6 +28,7 @@ public class MigrationController : Controller
     private readonly POConditionMasterMigration _poConditionMigration;
     private readonly WorkflowMasterMigration _workflowMigration;
     private readonly WorkflowMasterHistoryMigration _workflowHistoryMigration;
+    private readonly WorkflowHistoryMigration _workflowHistoryTableMigration;
     private readonly WorkflowAmountMigration _workflowAmountMigration;
     private readonly WorkflowAmountHistoryMigration _workflowAmountHistoryMigration;
     private readonly WorkflowApprovalUserMigration _workflowApprovalUserMigration;
@@ -53,6 +54,7 @@ public class MigrationController : Controller
         POConditionMasterMigration poConditionMigration,
         WorkflowMasterMigration workflowMigration,
         WorkflowMasterHistoryMigration workflowHistoryMigration,
+        WorkflowHistoryMigration workflowHistoryTableMigration,
         WorkflowAmountMigration workflowAmountMigration,
         WorkflowAmountHistoryMigration workflowAmountHistoryMigration,
         WorkflowApprovalUserMigration workflowApprovalUserMigration,
@@ -76,6 +78,7 @@ public class MigrationController : Controller
         _poConditionMigration = poConditionMigration;
         _workflowMigration = workflowMigration;
         _workflowHistoryMigration = workflowHistoryMigration;
+        _workflowHistoryTableMigration = workflowHistoryTableMigration;
         _workflowAmountMigration = workflowAmountMigration;
         _workflowAmountHistoryMigration = workflowAmountHistoryMigration;
         _workflowApprovalUserMigration = workflowApprovalUserMigration;
@@ -111,6 +114,7 @@ public class MigrationController : Controller
             new { name = "pocondition", description = "TBL_POConditionTypeMaster to po_condition_master" },
             new { name = "workflow", description = "TBL_WorkFlowMain to workflow_master" },
             new { name = "workflowhistory", description = "TBL_WorkFlowMain_History to workflow_master_history" },
+            new { name = "workflowhistorytable", description = "TBL_WORKFLOW_HISTORY to workflow_history" },
             new { name = "workflowamount", description = "TBL_WorkFlowSub to workflow_amount" },
             new { name = "workflowamounthistory", description = "TBL_WorkFlowSub_History to workflow_amount_history" },
             new { name = "workflowapprovaluser", description = "TBL_WorkFlowSubSub to workflow_approval_user" },
@@ -205,6 +209,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "workflowhistory")
         {
             var mappings = _workflowHistoryMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "workflowhistorytable")
+        {
+            var mappings = _workflowHistoryTableMigration.GetMappings();
             return Json(mappings);
         }
         else if (table.ToLower() == "workflowamount")
@@ -366,6 +375,10 @@ public class MigrationController : Controller
             {
                 recordCount = await _workflowHistoryMigration.MigrateAsync();
             }
+            else if (request.Table.ToLower() == "workflowhistorytable")
+            {
+                recordCount = await _workflowHistoryTableMigration.MigrateAsync();
+            }
             else if (request.Table.ToLower() == "workflowamount")
             {
                 recordCount = await _workflowAmountMigration.MigrateAsync();
@@ -453,6 +466,7 @@ public class MigrationController : Controller
                 _poConditionMigration,
                 _workflowMigration,
                 _workflowHistoryMigration,
+                _workflowHistoryTableMigration,
                 _workflowAmountMigration,
                 _workflowAmountHistoryMigration,
                 _workflowApprovalUserMigration,
@@ -505,6 +519,7 @@ public class MigrationController : Controller
             results["POCondition"] = new { count = await _poConditionMigration.MigrateAsync(), success = true };
             results["Workflow"] = new { count = await _workflowMigration.MigrateAsync(), success = true };
             results["WorkflowHistory"] = new { count = await _workflowHistoryMigration.MigrateAsync(), success = true };
+            results["WorkflowHistoryTable"] = new { count = await _workflowHistoryTableMigration.MigrateAsync(), success = true };
             results["WorkflowAmount"] = new { count = await _workflowAmountMigration.MigrateAsync(), success = true };
             results["WorkflowAmountHistory"] = new { count = await _workflowAmountHistoryMigration.MigrateAsync(), success = true };
             results["WorkflowApprovalUser"] = new { count = await _workflowApprovalUserMigration.MigrateAsync(), success = true };
@@ -773,6 +788,10 @@ public class MigrationController : Controller
             {
                 validation = await _workflowAmountMigration.ValidateSourceDataAsync();
             }
+            else if (table.ToLower() == "workflowhistorytable")
+            {
+                validation = await _workflowHistoryTableMigration.ValidateSourceDataAsync();
+            }
             else
             {
                 return Json(new { success = false, error = "Validation not available for this table" });
@@ -847,6 +866,20 @@ public class MigrationController : Controller
         {
             var recordCount = await _workflowAmountMigration.MigrateWithoutTransactionAsync();
             return Json(new { success = true, message = $"WorkflowAmount migration completed without transaction. {recordCount} records migrated." });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
+        }
+    }
+
+    [HttpPost("migrate-workflow-history-no-transaction")]
+    public async Task<IActionResult> MigrateWorkflowHistoryNoTransaction()
+    {
+        try
+        {
+            var recordCount = await _workflowHistoryTableMigration.MigrateWithoutTransactionAsync();
+            return Json(new { success = true, message = $"WorkflowHistory migration completed without transaction. {recordCount} records migrated." });
         }
         catch (Exception ex)
         {
