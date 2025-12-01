@@ -9,6 +9,7 @@ using DataMigration.Services;
 public class SupplierInactiveMigration : MigrationService
 {
     private const int BATCH_SIZE = 1000;
+    private readonly Microsoft.Extensions.Logging.ILogger<SupplierInactiveMigration> _logger;
     protected override string SelectQuery => @"
         SELECT 
             vi.VendorInactiveId,
@@ -53,7 +54,10 @@ public class SupplierInactiveMigration : MigrationService
             @deleted_date
         )";
 
-    public SupplierInactiveMigration(IConfiguration configuration) : base(configuration) { }
+    public SupplierInactiveMigration(IConfiguration configuration, Microsoft.Extensions.Logging.ILogger<SupplierInactiveMigration> logger) : base(configuration)
+    {
+        _logger = logger;
+    }
 
     protected override List<string> GetLogics()
     {
@@ -96,6 +100,7 @@ public class SupplierInactiveMigration : MigrationService
     protected override async Task<int> ExecuteMigrationAsync(SqlConnection sqlConn, NpgsqlConnection pgConn, NpgsqlTransaction? transaction = null)
     {
         int insertedCount = 0;
+        int batchNumber = 0;
         var batch = new List<Dictionary<string, object>>();
         using var selectCmd = new SqlCommand(SelectQuery, sqlConn);
         using var reader = await selectCmd.ExecuteReaderAsync();
@@ -107,46 +112,68 @@ public class SupplierInactiveMigration : MigrationService
 
             var record = new Dictionary<string, object>
             {
-                ["@supplier_inactive_id"] = reader["VendorInactiveId"],
-                ["@supplier_id"] = vendorId,
-                ["@plant_company_code"] = reader["CompanyCode"] ?? (object)DBNull.Value,
-                ["@inactive"] = (reader["Inactive"]?.ToString() == "Y" || reader["Inactive"]?.ToString() == "1"),
-                ["@inactivedate"] = reader["InactiveDate"] ?? (object)DBNull.Value,
-                ["@created_by"] = 0,
-                ["@created_date"] = DateTime.UtcNow,
-                ["@modified_by"] = DBNull.Value,
-                ["@modified_date"] = DBNull.Value,
-                ["@is_deleted"] = false,
-                ["@deleted_by"] = DBNull.Value,
-                ["@deleted_date"] = DBNull.Value
+                ["supplier_inactive_id"] = reader["VendorInactiveId"],
+                ["supplier_id"] = vendorId,
+                ["plant_company_code"] = reader["CompanyCode"] ?? (object)DBNull.Value,
+                ["inactive"] = (reader["Inactive"]?.ToString() == "Y" || reader["Inactive"]?.ToString() == "1"),
+                ["inactivedate"] = reader["InactiveDate"] ?? (object)DBNull.Value,
+                ["created_by"] = 0,
+                ["created_date"] = DateTime.UtcNow,
+                ["modified_by"] = DBNull.Value,
+                ["modified_date"] = DBNull.Value,
+                ["is_deleted"] = false,
+                ["deleted_by"] = DBNull.Value,
+                ["deleted_date"] = DBNull.Value
             };
             batch.Add(record);
             if (batch.Count >= BATCH_SIZE)
             {
-                insertedCount += await InsertBatchAsync(pgConn, batch, transaction);
+                batchNumber++;
+                _logger.LogInformation($"Starting batch {batchNumber} with {batch.Count} records...");
+                insertedCount += await InsertBatchAsync(pgConn, batch, transaction, batchNumber);
+                _logger.LogInformation($"Completed batch {batchNumber}. Total records inserted so far: {insertedCount}");
                 batch.Clear();
             }
         }
         if (batch.Count > 0)
         {
-            insertedCount += await InsertBatchAsync(pgConn, batch, transaction);
+            batchNumber++;
+            _logger.LogInformation($"Starting batch {batchNumber} with {batch.Count} records...");
+            insertedCount += await InsertBatchAsync(pgConn, batch, transaction, batchNumber);
+            _logger.LogInformation($"Completed batch {batchNumber}. Total records inserted so far: {insertedCount}");
         }
+        _logger.LogInformation($"Migration finished. Total records inserted: {insertedCount}");
         return insertedCount;
-
     }
 
-    private async Task<int> InsertBatchAsync(NpgsqlConnection pgConn, List<Dictionary<string, object>> batch, NpgsqlTransaction? transaction = null)
+    private async Task<int> InsertBatchAsync(NpgsqlConnection pgConn, List<Dictionary<string, object>> batch, NpgsqlTransaction? transaction = null, int batchNumber = 0)
     {
-        int count = 0;
+        if (batch.Count == 0) return 0;
+        // Build a single multi-row insert
+        var columns = new List<string> {
+            "supplier_inactive_id", "supplier_id", "plant_company_code", "inactive", "inactivedate",
+            "created_by", "created_date", "modified_by", "modified_date", "is_deleted", "deleted_by", "deleted_date"
+        };
+        var valueRows = new List<string>();
+        var parameters = new List<Npgsql.NpgsqlParameter>();
+        int paramIndex = 0;
         foreach (var record in batch)
         {
-            using var insertCmd = new NpgsqlCommand(InsertQuery, pgConn, transaction);
-            foreach (var kvp in record)
+            var valuePlaceholders = new List<string>();
+            foreach (var col in columns)
             {
-                insertCmd.Parameters.AddWithValue(kvp.Key, kvp.Value ?? DBNull.Value);
+                var paramName = $"@p{paramIndex}";
+                valuePlaceholders.Add(paramName);
+                parameters.Add(new Npgsql.NpgsqlParameter(paramName, record[col] ?? DBNull.Value));
+                paramIndex++;
             }
-            count += await insertCmd.ExecuteNonQueryAsync();
+            valueRows.Add($"({string.Join(", ", valuePlaceholders)})");
         }
+        var sql = $"INSERT INTO supplier_inactive ({string.Join(", ", columns)}) VALUES {string.Join(", ", valueRows)}";
+        using var insertCmd = new Npgsql.NpgsqlCommand(sql, pgConn, transaction);
+        insertCmd.Parameters.AddRange(parameters.ToArray());
+        int count = await insertCmd.ExecuteNonQueryAsync();
+        _logger.LogInformation($"Batch {batchNumber}: Inserted {count} records.");
         return count;
     }
     }
