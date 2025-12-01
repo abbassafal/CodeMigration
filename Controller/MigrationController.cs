@@ -48,6 +48,7 @@ public class MigrationController : Controller
     private readonly ARCSubMigration _arcSubMigration;
     private readonly ARCPlantMigration _arcPlantMigration;
     private readonly ARCAttachmentMigration _arcAttachmentMigration;
+    private readonly ARCApprovalAuthorityMigration _arcApprovalAuthorityMigration;
 
 
     public MigrationController(
@@ -86,7 +87,8 @@ public class MigrationController : Controller
         SupplierOtherContactMigration supplierOtherContactMigration,
         ARCSubMigration arcSubMigration,
         ARCPlantMigration arcPlantMigration,
-        ARCAttachmentMigration arcAttachmentMigration
+        ARCAttachmentMigration arcAttachmentMigration,
+        ARCApprovalAuthorityMigration arcApprovalAuthorityMigration
     )
     {
         _uomMigration = uomMigration;
@@ -125,6 +127,7 @@ public class MigrationController : Controller
 		_arcSubMigration = arcSubMigration;
 		_arcPlantMigration = arcPlantMigration;
 		_arcAttachmentMigration = arcAttachmentMigration;
+		_arcApprovalAuthorityMigration = arcApprovalAuthorityMigration;
     }
 
     [HttpPost("MigrateARCPlant")]
@@ -138,6 +141,13 @@ public class MigrationController : Controller
     public async Task<IActionResult> MigrateARCAttachment()
     {
         int migrated = await _arcAttachmentMigration.MigrateAsync();
+        return Ok(new { migrated });
+    }
+
+    [HttpPost("MigrateARCApprovalAuthority")]
+    public async Task<IActionResult> MigrateARCApprovalAuthority()
+    {
+        int migrated = await _arcApprovalAuthorityMigration.MigrateAsync();
         return Ok(new { migrated });
     }
 
@@ -169,6 +179,7 @@ public class MigrationController : Controller
             new {name = "arcsub", description = "TBL_ARCSub to arc_sub" },
             new {name = "arcplant", description = "TBL_ARCPlant to arc_plant" },
             new {name = "arcattachment", description = "TBL_ARCATTACHMENT to arc_attachments" },
+            new {name = "arcapprovalauthority", description = "TBL_ARCApprovalAuthority to arc_workflow" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
             new { name = "suppliergroup", description = "TBL_SupplierGroupMaster to supplier_group_master" },
@@ -356,6 +367,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "arcattachment")
         {
             var mappings = _arcAttachmentMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "arcapprovalauthority")
+        {
+            var mappings = _arcApprovalAuthorityMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -560,6 +576,10 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "arcattachment")
             {
                 recordCount = await _arcAttachmentMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "arcapprovalauthority")
+            {
+                recordCount = await _arcApprovalAuthorityMigration.MigrateAsync();
             }
             else
             {

@@ -6,22 +6,22 @@ using Npgsql;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 
-public class ARCAttachmentMigration : MigrationService
+public class ARCApprovalAuthorityMigration : MigrationService
 {
     private const int BATCH_SIZE = 1000;
-    private readonly ILogger<ARCAttachmentMigration> _logger;
+    private readonly ILogger<ARCApprovalAuthorityMigration> _logger;
 
-    protected override string SelectQuery => @"SELECT * FROM TBL_ARCATTACHMENT ORDER BY ARCATTACHMENTID";
-    protected override string InsertQuery => @"INSERT INTO arc_attachements (...) VALUES (...)"; // Not used, but required
+    protected override string SelectQuery => @"SELECT * FROM TBL_ARCApprovalAuthority ORDER BY ARCApprovalAuthorityId";
+    protected override string InsertQuery => @"INSERT INTO arc_workflow (...) VALUES (...)"; // Not used, but required
     
     protected override List<string> GetLogics()
     {
         return new List<string> {
-            "Direct", "Direct", "Direct", "Direct", "Direct", "Fixed: 0", "Fixed: DBNull", "Fixed: 0", "Fixed: DBNull", "Fixed: false", "Fixed: null", "Fixed: null"
+            "Direct", "Direct", "Direct", "Direct", "CreateDate->assign_date", "Direct", "Fixed: 0", "Fixed: DBNull", "Fixed: 0", "Fixed: DBNull", "Fixed: false", "Fixed: null", "Fixed: null"
         };
     }
 
-    public ARCAttachmentMigration(IConfiguration configuration, ILogger<ARCAttachmentMigration> logger) : base(configuration)
+    public ARCApprovalAuthorityMigration(IConfiguration configuration, ILogger<ARCApprovalAuthorityMigration> logger) : base(configuration)
     {
         _logger = logger;
     }
@@ -30,11 +30,12 @@ public class ARCAttachmentMigration : MigrationService
     {
         return new List<object>
         {
-            new { source = "ARCATTACHMENTID", target = "arc_attchments_id" },
-            new { source = "ARCMainID", target = "arc_header_id" },
-            new { source = "UPLOADPATH", target = "upload_path" },
-            new { source = "FILENAME", target = "file_name" },
-            new { source = "Remarks", target = "remarks" },
+            new { source = "ARCApprovalAuthorityId", target = "arc_workflow_id" },
+            new { source = "ARCId", target = "arc_header_id" },
+            new { source = "ApprovedBy", target = "approved_by" },
+            new { source = "AlternateApprovedBy", target = "assign_date" },
+            new { source = "CreateDate", target = "assign_date" },
+            new { source = "Level", target = "level" },
             new { source = "-", target = "created_by" },
             new { source = "-", target = "created_date" },
             new { source = "-", target = "modified_by" },
@@ -58,7 +59,7 @@ public class ARCAttachmentMigration : MigrationService
         using var reader = await selectCmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            var arcHeaderId = reader.IsDBNull(reader.GetOrdinal("ARCMainID")) ? (int?)null : Convert.ToInt32(reader["ARCMainID"]);
+            var arcHeaderId = reader.IsDBNull(reader.GetOrdinal("ARCId")) ? (int?)null : Convert.ToInt32(reader["ARCId"]);
 
             // Skip record if foreign key is null or invalid
             if (!arcHeaderId.HasValue)
@@ -77,10 +78,10 @@ public class ARCAttachmentMigration : MigrationService
 
             var record = new Dictionary<string, object>
             {
-                ["arc_header_id"] = arcHeaderId.HasValue ? (object)arcHeaderId.Value : DBNull.Value,
-                ["upload_path"] = reader["UPLOADPATH"] ?? (object)DBNull.Value,
-                ["file_name"] = reader["FILENAME"] ?? (object)DBNull.Value,
-                ["remarks"] = reader["Remarks"] ?? (object)DBNull.Value,
+                ["arc_header_id"] = arcHeaderId.Value,
+                ["approved_by"] = reader.IsDBNull(reader.GetOrdinal("ApprovedBy")) ? (object)DBNull.Value : Convert.ToInt32(reader["ApprovedBy"]),
+                ["assign_date"] = reader["CreateDate"] ?? (object)DBNull.Value,
+                ["level"] = reader.IsDBNull(reader.GetOrdinal("Level")) ? (object)DBNull.Value : Convert.ToInt32(reader["Level"]),
                 ["created_by"] = 0,
                 ["created_date"] = DBNull.Value,
                 ["modified_by"] = 0,
@@ -129,7 +130,7 @@ public class ARCAttachmentMigration : MigrationService
     {
         if (batch.Count == 0) return 0;
         var columns = new List<string> {
-            "arc_header_id", "upload_path", "file_name", "remarks", "created_by", "created_date", "modified_by", "modified_date", "is_deleted", "deleted_by", "deleted_date"
+            "arc_header_id", "approved_by", "assign_date", "level", "created_by", "created_date", "modified_by", "modified_date", "is_deleted", "deleted_by", "deleted_date"
         };
         var valueRows = new List<string>();
         var parameters = new List<NpgsqlParameter>();
@@ -146,7 +147,7 @@ public class ARCAttachmentMigration : MigrationService
             }
             valueRows.Add($"({string.Join(", ", valuePlaceholders)})");
         }
-        var sql = $"INSERT INTO arc_attachements ({string.Join(", ", columns)}) VALUES {string.Join(", ", valueRows)} RETURNING arc_attchments_id";
+        var sql = $"INSERT INTO arc_workflow ({string.Join(", ", columns)}) VALUES {string.Join(", ", valueRows)} RETURNING arc_workflow_id";
         using var insertCmd = new NpgsqlCommand(sql, pgConn, transaction);
         insertCmd.Parameters.AddRange(parameters.ToArray());
         var insertedIds = new List<int>();
@@ -155,10 +156,10 @@ public class ARCAttachmentMigration : MigrationService
             while (await reader.ReadAsync())
                 insertedIds.Add(reader.GetInt32(0));
         }
-        _logger.LogInformation($"Batch {batchNumber}: Inserted {insertedIds.Count} records into arc_attachements.");
+        _logger.LogInformation($"Batch {batchNumber}: Inserted {insertedIds.Count} records into arc_workflow.");
         
-        // Insert into arc_attachements_history
-        var historyColumns = new List<string>(columns) { "arc_attchments_id" };
+        // Insert into arc_workflow_history
+        var historyColumns = new List<string>(columns) { "arc_workflow_id" };
         var historyValueRows = new List<string>();
         var historyParameters = new List<NpgsqlParameter>();
         for (int j = 0; j < batch.Count; j++)
@@ -166,17 +167,17 @@ public class ARCAttachmentMigration : MigrationService
             var rowParams = new List<string>();
             foreach (var col in columns)
                 rowParams.Add($"@h_{col}_{j}");
-            rowParams.Add($"@h_arc_attchments_id_{j}");
+            rowParams.Add($"@h_arc_workflow_id_{j}");
             for (int k = 0; k < columns.Count; k++)
                 historyParameters.Add(new NpgsqlParameter($"@h_{columns[k]}_{j}", parameters[j * columns.Count + k].Value));
-            historyParameters.Add(new NpgsqlParameter($"@h_arc_attchments_id_{j}", insertedIds[j]));
+            historyParameters.Add(new NpgsqlParameter($"@h_arc_workflow_id_{j}", insertedIds[j]));
             historyValueRows.Add($"({string.Join(", ", rowParams)})");
         }
-        var historySql = $"INSERT INTO arc_attachements_history ({string.Join(", ", historyColumns)}) VALUES {string.Join(", ", historyValueRows)}";
+        var historySql = $"INSERT INTO arc_workflow_history ({string.Join(", ", historyColumns)}) VALUES {string.Join(", ", historyValueRows)}";
         using var historyCmd = new NpgsqlCommand(historySql, pgConn, transaction);
         historyCmd.Parameters.AddRange(historyParameters.ToArray());
         await historyCmd.ExecuteNonQueryAsync();
-        _logger.LogInformation($"Batch {batchNumber}: Inserted {batch.Count} records into arc_attachements_history.");
+        _logger.LogInformation($"Batch {batchNumber}: Inserted {batch.Count} records into arc_workflow_history.");
         return batch.Count;
     }
 }

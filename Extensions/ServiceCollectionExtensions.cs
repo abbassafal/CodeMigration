@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ARCSubMigration>();
         services.AddScoped<ARCPlantMigration>();
         services.AddScoped<ARCAttachmentMigration>();
+        services.AddScoped<ARCApprovalAuthorityMigration>();
         services.AddScoped<WorkflowApprovalUserMigration>();
         services.AddScoped<WorkflowApprovalUserHistoryMigration>();
 
