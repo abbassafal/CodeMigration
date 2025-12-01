@@ -17,7 +17,7 @@ public class ARCPlantMigration : MigrationService
     protected override List<string> GetLogics()
     {
         return new List<string> {
-            "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Fixed: false", "Fixed: null", "Fixed: null"
+            "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Fixed: 0", "Fixed: DBNull", "Fixed: 0", "Fixed: DBNull", "Fixed: false", "Fixed: null", "Fixed: null"
         };
     }
 
@@ -39,10 +39,10 @@ public class ARCPlantMigration : MigrationService
             new { source = "BlockDate", target = "block_date" },
             new { source = "BlockRemark", target = "block_remark" },
             new { source = "Status", target = "status" },
-            new { source = "CreatedBy", target = "created_by" },
-            new { source = "CreateDate", target = "created_date" },
-            new { source = "UpdatedBy", target = "modified_by" },
-            new { source = "UpdateDate", target = "modified_date" },
+            new { source = "-", target = "created_by" },
+            new { source = "-", target = "created_date" },
+            new { source = "-", target = "modified_by" },
+            new { source = "-", target = "modified_date" },
             new { source = "-", target = "is_deleted" },
             new { source = "-", target = "deleted_by" },
             new { source = "-", target = "deleted_date" }
@@ -60,18 +60,18 @@ public class ARCPlantMigration : MigrationService
         {
             var record = new Dictionary<string, object>
             {
-                ["arc_header_id"] = reader["ARCMainId"] ?? (object)DBNull.Value,
-                ["plant_id"] = reader["Plant"] ?? (object)DBNull.Value,
-                ["payment_term_id"] = reader["PaymentTerm"] ?? (object)DBNull.Value,
-                ["incoterm_id"] = reader["IncoTerm"] ?? (object)DBNull.Value,
-                ["supplier_id"] = reader["AssignDistributor"] ?? (object)DBNull.Value,
+                ["arc_header_id"] = reader.IsDBNull(reader.GetOrdinal("ARCMainId")) ? (object)DBNull.Value : Convert.ToInt32(reader["ARCMainId"]),
+                ["plant_id"] = reader.IsDBNull(reader.GetOrdinal("Plant")) ? (object)DBNull.Value : Convert.ToInt32(reader["Plant"]),
+                ["payment_term_id"] = reader.IsDBNull(reader.GetOrdinal("PaymentTerm")) ? (object)DBNull.Value : Convert.ToInt32(reader["PaymentTerm"]),
+                ["incoterm_id"] = reader.IsDBNull(reader.GetOrdinal("IncoTerm")) ? (object)DBNull.Value : Convert.ToInt32(reader["IncoTerm"]),
+                ["supplier_id"] = reader.IsDBNull(reader.GetOrdinal("AssignDistributor")) ? (object)DBNull.Value : Convert.ToInt32(reader["AssignDistributor"]),
                 ["block_date"] = reader["BlockDate"] ?? (object)DBNull.Value,
                 ["block_remark"] = reader["BlockRemark"] ?? (object)DBNull.Value,
                 ["status"] = reader["Status"] ?? (object)DBNull.Value,
-                ["created_by"] = reader["CreatedBy"] ?? (object)DBNull.Value,
-                ["created_date"] = reader["CreateDate"] ?? (object)DBNull.Value,
-                ["modified_by"] = reader["UpdatedBy"] ?? (object)DBNull.Value,
-                ["modified_date"] = reader["UpdateDate"] ?? (object)DBNull.Value,
+                ["created_by"] = 0,
+                ["created_date"] = DBNull.Value,
+                ["modified_by"] = 0,
+                ["modified_date"] = DBNull.Value,
                 ["is_deleted"] = false,
                 ["deleted_by"] = DBNull.Value,
                 ["deleted_date"] = DBNull.Value
