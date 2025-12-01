@@ -157,6 +157,7 @@ public class MigrationController : Controller
             new { name = "company", description = "TBL_CompanyMaster to company_master" },
             new { name = "arcmain", description = "TBL_ARCMain to arc_main" },
             new {name = "arcsub", description = "TBL_ARCSub to arc_sub" },
+            new {name = "arcplant", description = "TBL_ARCPlant to arc_plant" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
             new { name = "suppliergroup", description = "TBL_SupplierGroupMaster to supplier_group_master" },
@@ -334,6 +335,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "arcsub")
         {
             var mappings = _arcSubMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "arcplant")
+        {
+            var mappings = _arcPlantMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
