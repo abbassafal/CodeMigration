@@ -209,7 +209,80 @@ public class ARCMainMigration : MigrationService
                 Console.WriteLine($"Executing INSERT for ARCMainId: {arcMainId}");
                 int result = await pgCmd.ExecuteNonQueryAsync();
                 Console.WriteLine($"Insert result for ARCMainId {arcMainId}: {result} row(s) affected");
-                
+
+                // Insert into arc_header_history as well
+                var historyInsert = @"
+                    INSERT INTO arc_header_history (
+                        arc_header_id,
+                        arc_name,
+                        arc_number,
+                        arc_description,
+                        supplier_name,
+                        supplier_code,
+                        supplier_quote_ref,
+                        arc_start_date,
+                        arc_end_date,
+                        remarks,
+                        approval_status,
+                        supplier_id,
+                        total_arc_value,
+                        arc_type,
+                        tolerance_percentage,
+                        company_id,
+                        event_id,
+                        used_total_value,
+                        arc_terms,
+                        created_by,
+                        created_date,
+                        modified_by,
+                        modified_date,
+                        is_deleted,
+                        deleted_by,
+                        deleted_date,
+                        currency_id
+                    ) VALUES (
+                        @arc_header_id,
+                        @arc_name,
+                        @arc_number,
+                        @arc_description,
+                        @supplier_name,
+                        @supplier_code,
+                        @supplier_quote_ref,
+                        @arc_start_date,
+                        @arc_end_date,
+                        @remarks,
+                        @approval_status,
+                        @supplier_id,
+                        @total_arc_value,
+                        @arc_type,
+                        @tolerance_percentage,
+                        @company_id,
+                        @event_id,
+                        @used_total_value,
+                        @arc_terms,
+                        @created_by,
+                        @created_date,
+                        @modified_by,
+                        @modified_date,
+                        @is_deleted,
+                        @deleted_by,
+                        @deleted_date,
+                        @currency_id
+                    )";
+                using (var historyCmd = new NpgsqlCommand(historyInsert, pgConn, transaction))
+                {
+                    foreach (Npgsql.NpgsqlParameter param in pgCmd.Parameters)
+                    {
+                        // arc_header_history does not have arc_header_history_id in insert (auto-increment)
+                        if (param.ParameterName != "@arc_header_history_id")
+                        {
+                            historyCmd.Parameters.AddWithValue(param.ParameterName, param.Value);
+                        }
+                    }
+                    int historyResult = await historyCmd.ExecuteNonQueryAsync();
+                    Console.WriteLine($"Insert into arc_header_history for ARCMainId {arcMainId}: {historyResult} row(s) affected");
+                }
+
                 if (result > 0) 
                 {
                     insertedCount++;
