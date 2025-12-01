@@ -249,10 +249,15 @@ public class ARCSubMigration : MigrationService
         int count = await insertCmd.ExecuteNonQueryAsync();
         _logger.LogInformation($"Batch {batchNumber}: Inserted {count} records into arc_lines.");
 
-        // Insert into arc_lines_history
+        // Insert into arc_lines_history (create a new parameter list to avoid parameter reuse error)
         var historySql = $"INSERT INTO arc_lines_history ({string.Join(", ", columns)}) VALUES {string.Join(", ", valueRows)}";
+        var historyParameters = new List<Npgsql.NpgsqlParameter>();
+        foreach (var p in parameters)
+        {
+            historyParameters.Add(new Npgsql.NpgsqlParameter(p.ParameterName, p.Value));
+        }
         using var historyCmd = new Npgsql.NpgsqlCommand(historySql, pgConn, transaction);
-        historyCmd.Parameters.AddRange(parameters.ToArray());
+        historyCmd.Parameters.AddRange(historyParameters.ToArray());
         int historyCount = await historyCmd.ExecuteNonQueryAsync();
         _logger.LogInformation($"Batch {batchNumber}: Inserted {historyCount} records into arc_lines_history.");
 

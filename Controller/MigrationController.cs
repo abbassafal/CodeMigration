@@ -147,6 +147,7 @@ public class MigrationController : Controller
             new { name = "taxcode", description = "TBL_TaxCodeMaster to tax_code_master" },
             new { name = "company", description = "TBL_CompanyMaster to company_master" },
             new { name = "arcmain", description = "TBL_ARCMain to arc_main" },
+            new {name = "arcsub", description = "TBL_ARCSub to arc_sub" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
             new { name = "suppliergroup", description = "TBL_SupplierGroupMaster to supplier_group_master" },
