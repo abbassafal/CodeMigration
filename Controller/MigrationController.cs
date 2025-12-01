@@ -46,6 +46,7 @@ public class MigrationController : Controller
     private readonly SupplierInactiveMigration _supplierInactiveMigration;
     private readonly SupplierOtherContactMigration _supplierOtherContactMigration;
     private readonly ARCSubMigration _arcSubMigration;
+    private readonly ARCPlantMigration _arcPlantMigration;
 
 
     public MigrationController(
@@ -82,7 +83,8 @@ public class MigrationController : Controller
         SupplierPaymentIncotermMigration supplierPaymentIncotermMigration,
         SupplierInactiveMigration supplierInactiveMigration,
         SupplierOtherContactMigration supplierOtherContactMigration,
-        ARCSubMigration arcSubMigration
+        ARCSubMigration arcSubMigration,
+        ARCPlantMigration arcPlantMigration
     )
     {
         _uomMigration = uomMigration;
@@ -118,8 +120,15 @@ public class MigrationController : Controller
         _supplierPaymentIncotermMigration = supplierPaymentIncotermMigration;
         _supplierInactiveMigration = supplierInactiveMigration;
         _supplierOtherContactMigration = supplierOtherContactMigration;
-        _arcSubMigration = arcSubMigration;
-        
+		_arcSubMigration = arcSubMigration;
+		_arcPlantMigration = arcPlantMigration;
+    }
+
+    [HttpPost("MigrateARCPlant")]
+    public async Task<IActionResult> MigrateARCPlant()
+    {
+        int migrated = await _arcPlantMigration.MigrateAsync();
+        return Ok(new { migrated });
     }
 
     public IActionResult Index()
@@ -521,6 +530,10 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "arcsub")
             {
                 recordCount = await _arcSubMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "arcplant")
+            {
+                recordCount = await _arcPlantMigration.MigrateAsync();
             }
             else
             {
