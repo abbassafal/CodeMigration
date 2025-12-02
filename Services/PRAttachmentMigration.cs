@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 public class PRAttachmentMigration : MigrationService
 {
-    private const int BATCH_SIZE = 100; // Reduced for large binary data
+    private const int BATCH_SIZE = 500; // Increased for faster migration
     private readonly ILogger<PRAttachmentMigration> _logger;
 
     protected override string SelectQuery => @"
@@ -41,7 +41,20 @@ INSERT INTO pr_attachments (
     pr_attachment_id, erp_pr_lines_id, upload_path, file_name, remarks, is_header_doc, pr_attachment_data, pr_attachment_extensions, created_by, created_date, modified_by, modified_date, is_deleted, deleted_by, deleted_date
 ) VALUES (
     @pr_attachment_id, @erp_pr_lines_id, @upload_path, @file_name, @remarks, @is_header_doc, @pr_attachment_data, @pr_attachment_extensions, @created_by, @created_date, @modified_by, @modified_date, @is_deleted, @deleted_by, @deleted_date
-)";
+)
+ON CONFLICT (pr_attachment_id) DO UPDATE SET
+    erp_pr_lines_id = EXCLUDED.erp_pr_lines_id,
+    upload_path = EXCLUDED.upload_path,
+    file_name = EXCLUDED.file_name,
+    remarks = EXCLUDED.remarks,
+    is_header_doc = EXCLUDED.is_header_doc,
+    pr_attachment_data = EXCLUDED.pr_attachment_data,
+    pr_attachment_extensions = EXCLUDED.pr_attachment_extensions,
+    modified_by = EXCLUDED.modified_by,
+    modified_date = EXCLUDED.modified_date,
+    is_deleted = EXCLUDED.is_deleted,
+    deleted_by = EXCLUDED.deleted_by,
+    deleted_date = EXCLUDED.deleted_date";
 
     public PRAttachmentMigration(IConfiguration configuration, ILogger<PRAttachmentMigration> logger) : base(configuration)
     {
@@ -99,40 +112,13 @@ INSERT INTO pr_attachments (
         using var selectCmd = new SqlCommand(SelectQuery, sqlConn);
         selectCmd.CommandTimeout = 300; // Increase timeout for binary data
         
-        using var reader = await selectCmd.ExecuteReaderAsync(System.Data.CommandBehavior.SequentialAccess);
+        using var reader = await selectCmd.ExecuteReaderAsync();
 
         while (await reader.ReadAsync())
         {
-            // Read all columns in STRICT SEQUENTIAL ORDER by ordinal (required for SequentialAccess)
-            // Column 0: PRATTACHMENTID
-            var prAttachmentId = reader.IsDBNull(0) ? DBNull.Value : (object)reader.GetInt32(0);
-            
-            // Column 1: PRID
-            var prId = reader.IsDBNull(1) ? DBNull.Value : (object)reader.GetInt32(1);
-            
-            // Column 2: UPLOADPATH
-            var uploadPath = reader.IsDBNull(2) ? DBNull.Value : (object)reader.GetString(2);
-            
-            // Column 3: FILENAME
-            var fileName = reader.IsDBNull(3) ? DBNull.Value : (object)reader.GetString(3);
-            
-            // Column 4: UPLOADEDBYID
-            var uploadedById = reader.IsDBNull(4) ? DBNull.Value : (object)reader.GetInt32(4);
-            
-            // Column 5: PRType
-            var prType = reader.IsDBNull(5) ? DBNull.Value : (object)reader.GetString(5);
-            
-            // Column 6: PRNo
-            var prNo = reader.IsDBNull(6) ? DBNull.Value : (object)reader.GetString(6);
-            
-            // Column 7: ItemCode
-            var itemCode = reader.IsDBNull(7) ? DBNull.Value : (object)reader.GetString(7);
-            
-            // Column 8: PRTRANSID (maps to erp_pr_lines_id)
-            var prTransId = reader.IsDBNull(8) ? DBNull.Value : (object)reader.GetInt32(8);
-            
-            // Column 9: Remarks
-            var remarks = reader.IsDBNull(9) ? DBNull.Value : (object)reader.GetString(9);
+            // Read columns by name (SequentialAccess removed for simplicity with binary data)
+            var prAttachmentId = reader["PRATTACHMENTID"] ?? DBNull.Value;
+            var prTransId = reader["PRTRANSID"] ?? DBNull.Value;
             
             // Validate ERP PR Lines ID (using PRTRANSID which maps to erp_pr_lines_id)
             if (prTransId != DBNull.Value)
@@ -144,15 +130,6 @@ INSERT INTO pr_attachments (
                 {
                     _logger.LogWarning($"Skipping PRATTACHMENTID {prAttachmentId}: ERP PR Lines ID {erpPrLinesId} not found in erp_pr_lines.");
                     skippedCount++;
-                    
-                    // Must continue reading remaining columns to avoid breaking SequentialAccess
-                    // Column 10: PRATTACHMENTDATA (binary - skip by checking IsDBNull)
-                    if (!reader.IsDBNull(10))
-                    {
-                        // Read and discard to advance the reader
-                        reader.GetBytes(10, 0, null, 0, 0);
-                    }
-                    // Skip remaining columns 11-18
                     continue;
                 }
             }
@@ -160,50 +137,34 @@ INSERT INTO pr_attachments (
             {
                 _logger.LogWarning($"Skipping PRATTACHMENTID {prAttachmentId}: ERP PR Lines ID (PRTRANSID) is NULL.");
                 skippedCount++;
-                
-                // Must continue reading remaining columns to avoid breaking SequentialAccess
-                // Column 10: PRATTACHMENTDATA (binary - skip by checking IsDBNull)
-                if (!reader.IsDBNull(10))
-                {
-                    // Read and discard to advance the reader
-                    reader.GetBytes(10, 0, null, 0, 0);
-                }
-                // Skip remaining columns 11-18
                 continue;
             }
             
-            // Column 10: PRATTACHMENTDATA (binary data)
+            var uploadPath = reader["UPLOADPATH"] ?? DBNull.Value;
+            var fileName = reader["FILENAME"] ?? DBNull.Value;
+            var remarks = reader["Remarks"] ?? DBNull.Value;
+            
+            // Read binary data
             byte[]? binaryData = null;
-            if (!reader.IsDBNull(10))
+            int prAttachmentDataOrdinal = reader.GetOrdinal("PRATTACHMENTDATA");
+            if (!reader.IsDBNull(prAttachmentDataOrdinal))
             {
-                long dataLength = reader.GetBytes(10, 0, null, 0, 0);
-                binaryData = new byte[dataLength];
-                reader.GetBytes(10, 0, binaryData, 0, (int)dataLength);
+                long dataLength = reader.GetBytes(prAttachmentDataOrdinal, 0, null, 0, 0);
+                if (dataLength > 0)
+                {
+                    binaryData = new byte[dataLength];
+                    reader.GetBytes(prAttachmentDataOrdinal, 0, binaryData, 0, (int)dataLength);
+                }
             }
             
-            // Column 11: PR_ATTCHMNT_TYPE
-            var prAttchmntType = reader.IsDBNull(11) ? DBNull.Value : (object)reader.GetString(11);
-            
-            // Column 12: created_by
-            var createdBy = reader.IsDBNull(12) ? DBNull.Value : (object)reader.GetInt32(12);
-            
-            // Column 13: created_date
-            var createdDate = reader.IsDBNull(13) ? DBNull.Value : (object)reader.GetDateTime(13);
-            
-            // Column 14: modified_by
-            var modifiedBy = reader.IsDBNull(14) ? DBNull.Value : (object)reader.GetInt32(14);
-            
-            // Column 15: modified_date
-            var modifiedDate = reader.IsDBNull(15) ? DBNull.Value : (object)reader.GetDateTime(15);
-            
-            // Column 16: is_deleted
-            var isDeleted = reader.GetInt32(16) == 1;
-            
-            // Column 17: deleted_by
-            var deletedBy = reader.IsDBNull(17) ? DBNull.Value : (object)reader.GetInt32(17);
-            
-            // Column 18: deleted_date
-            var deletedDate = reader.IsDBNull(18) ? DBNull.Value : (object)reader.GetDateTime(18);
+            var prAttchmntType = reader["PR_ATTCHMNT_TYPE"] ?? DBNull.Value;
+            var createdBy = reader["created_by"] ?? DBNull.Value;
+            var createdDate = reader["created_date"] ?? DBNull.Value;
+            var modifiedBy = reader["modified_by"] ?? DBNull.Value;
+            var modifiedDate = reader["modified_date"] ?? DBNull.Value;
+            var isDeleted = Convert.ToInt32(reader["is_deleted"]) == 1;
+            var deletedBy = reader["deleted_by"] ?? DBNull.Value;
+            var deletedDate = reader["deleted_date"] ?? DBNull.Value;
 
             var record = new Dictionary<string, object>
             {
@@ -282,7 +243,13 @@ INSERT INTO pr_attachments (
             valueRows.Add($"({string.Join(", ", valuePlaceholders)})");
         }
 
-        var sql = $"INSERT INTO pr_attachments ({string.Join(", ", columns)}) VALUES {string.Join(", ", valueRows)}";
+        var updateColumns = columns.Where(c => c != "pr_attachment_id" && c != "created_by" && c != "created_date").ToList();
+        var updateSet = string.Join(", ", updateColumns.Select(c => $"{c} = EXCLUDED.{c}"));
+        
+        var sql = $@"INSERT INTO pr_attachments ({string.Join(", ", columns)}) 
+VALUES {string.Join(", ", valueRows)}
+ON CONFLICT (pr_attachment_id) DO UPDATE SET {updateSet}";
+        
         using var insertCmd = new NpgsqlCommand(sql, pgConn, transaction);
         insertCmd.CommandTimeout = 300; // Increase timeout for binary inserts
         insertCmd.Parameters.AddRange(parameters.ToArray());
