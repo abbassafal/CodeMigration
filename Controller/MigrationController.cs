@@ -50,6 +50,7 @@ public class MigrationController : Controller
     private readonly ARCAttachmentMigration _arcAttachmentMigration;
     private readonly ARCApprovalAuthorityMigration _arcApprovalAuthorityMigration;
     private readonly PRAttachmentMigration _prAttachmentMigration;
+    private readonly PRBoqItemsMigration _prBoqItemsMigration;
 
 
     public MigrationController(
@@ -90,7 +91,8 @@ public class MigrationController : Controller
         ARCPlantMigration arcPlantMigration,
         ARCAttachmentMigration arcAttachmentMigration,
         ARCApprovalAuthorityMigration arcApprovalAuthorityMigration,
-        PRAttachmentMigration prAttachmentMigration
+        PRAttachmentMigration prAttachmentMigration,
+        PRBoqItemsMigration prBoqItemsMigration
     )
     {
         _uomMigration = uomMigration;
@@ -131,6 +133,7 @@ public class MigrationController : Controller
 		_arcAttachmentMigration = arcAttachmentMigration;
 		_arcApprovalAuthorityMigration = arcApprovalAuthorityMigration;
         _prAttachmentMigration = prAttachmentMigration;
+        _prBoqItemsMigration = prBoqItemsMigration;
 
        
     }
@@ -140,6 +143,13 @@ public class MigrationController : Controller
             int migrated = await _prAttachmentMigration.MigrateAsync();
             return Ok(new { migrated });
         }
+
+    [HttpPost("MigratePRBoqItems")]
+    public async Task<IActionResult> MigratePRBoqItems()
+    {
+        int migrated = await _prBoqItemsMigration.MigrateAsync();
+        return Ok(new { migrated });
+    }
 
     [HttpPost("MigrateARCPlant")]
     public async Task<IActionResult> MigrateARCPlant()
@@ -191,6 +201,7 @@ public class MigrationController : Controller
             new {name = "arcplant", description = "TBL_ARCPlant to arc_plant" },
             new {name = "arcattachment", description = "TBL_ARCATTACHMENT to arc_attachments" },
             new {name = "prattachment", description = "TBL_PRATTACHMENT to pr_attachments" },
+            new {name = "prboqitems", description = "tbl_PRBOQItems to pr_boq_items" },
             new {name = "arcapprovalauthority", description = "TBL_ARCApprovalAuthority to arc_workflow" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
@@ -384,6 +395,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "prattachment")
         {
             var mappings = _prAttachmentMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "prboqitems")
+        {
+            var mappings = _prBoqItemsMigration.GetMappings();
             return Json(mappings);
         }
         else if (table.ToLower() == "arcapprovalauthority")
@@ -597,6 +613,10 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "prattachment")
             {
                 recordCount = await _prAttachmentMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "prboqitems")
+            {
+                recordCount = await _prBoqItemsMigration.MigrateAsync();
             }
             else if (request.Table.ToLower() == "arcapprovalauthority")
             {
