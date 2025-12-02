@@ -47,6 +47,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WorkflowApprovalUserMigration>();
         services.AddScoped<WorkflowApprovalUserHistoryMigration>();
 
+        services.AddScoped<PRAttachmentMigration>();
+
         return services;
     }
 }

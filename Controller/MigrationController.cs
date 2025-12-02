@@ -49,6 +49,7 @@ public class MigrationController : Controller
     private readonly ARCPlantMigration _arcPlantMigration;
     private readonly ARCAttachmentMigration _arcAttachmentMigration;
     private readonly ARCApprovalAuthorityMigration _arcApprovalAuthorityMigration;
+    private readonly PRAttachmentMigration _prAttachmentMigration;
 
 
     public MigrationController(
@@ -88,7 +89,8 @@ public class MigrationController : Controller
         ARCSubMigration arcSubMigration,
         ARCPlantMigration arcPlantMigration,
         ARCAttachmentMigration arcAttachmentMigration,
-        ARCApprovalAuthorityMigration arcApprovalAuthorityMigration
+        ARCApprovalAuthorityMigration arcApprovalAuthorityMigration,
+        PRAttachmentMigration prAttachmentMigration
     )
     {
         _uomMigration = uomMigration;
@@ -128,7 +130,16 @@ public class MigrationController : Controller
 		_arcPlantMigration = arcPlantMigration;
 		_arcAttachmentMigration = arcAttachmentMigration;
 		_arcApprovalAuthorityMigration = arcApprovalAuthorityMigration;
+        _prAttachmentMigration = prAttachmentMigration;
+
+       
     }
+     [HttpPost("MigratePRAttachment")]
+         public async Task<IActionResult> MigratePRAttachment()
+        {
+            int migrated = await _prAttachmentMigration.MigrateAsync();
+            return Ok(new { migrated });
+        }
 
     [HttpPost("MigrateARCPlant")]
     public async Task<IActionResult> MigrateARCPlant()
@@ -179,6 +190,7 @@ public class MigrationController : Controller
             new {name = "arcsub", description = "TBL_ARCSub to arc_sub" },
             new {name = "arcplant", description = "TBL_ARCPlant to arc_plant" },
             new {name = "arcattachment", description = "TBL_ARCATTACHMENT to arc_attachments" },
+            new {name = "prattachment", description = "TBL_PRATTACHMENT to pr_attachments" },
             new {name = "arcapprovalauthority", description = "TBL_ARCApprovalAuthority to arc_workflow" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
@@ -367,6 +379,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "arcattachment")
         {
             var mappings = _arcAttachmentMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "prattachment")
+        {
+            var mappings = _prAttachmentMigration.GetMappings();
             return Json(mappings);
         }
         else if (table.ToLower() == "arcapprovalauthority")
@@ -576,6 +593,10 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "arcattachment")
             {
                 recordCount = await _arcAttachmentMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "prattachment")
+            {
+                recordCount = await _prAttachmentMigration.MigrateAsync();
             }
             else if (request.Table.ToLower() == "arcapprovalauthority")
             {
