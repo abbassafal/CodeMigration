@@ -47,6 +47,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ARCApprovalAuthorityMigration>();
         services.AddScoped<WorkflowApprovalUserMigration>();
         services.AddScoped<WorkflowApprovalUserHistoryMigration>();
+        services.AddTransient<EventSettingMigrationService>();
 
         services.AddScoped<PRAttachmentMigration>();
         services.AddScoped<PRBoqItemsMigration>();

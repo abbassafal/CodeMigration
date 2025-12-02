@@ -424,7 +424,7 @@ public class UsersMasterMigration : MigrationService
             user_id, username, password_hash, password_salt, full_name, 
             email, mobile_number, masked_email, masked_mobile_number,
             email_hash, mobile_hash, status, reporting_to_id, user_type,
-            erp_username, approval_head, time_zone_country,
+            currency, erp_username, approval_head, time_zone_country,
             is_active, created_by, created_date
         ) FROM STDIN (FORMAT BINARY)";
 
@@ -480,6 +480,7 @@ public class UsersMasterMigration : MigrationService
                                     int reportingToId = int.TryParse(record.ReportingToId, out var rtId) ? rtId : 0;
                                     writer.Write(reportingToId, NpgsqlDbType.Integer); // reporting_to_id
                                     writer.Write(record.UserType ?? string.Empty, NpgsqlDbType.Text); // user_type
+                                    writer.Write(record.Currency ?? string.Empty, NpgsqlDbType.Text); // currency (mapped from currency_master)
                                     writer.Write(record.ErpUsername ?? string.Empty, NpgsqlDbType.Text); // erp_username
                                     // approval_head is INTEGER in PostgreSQL, convert from string
                                     int approvalHead = int.TryParse(record.ApprovalHead, out var ahId) ? ahId : 0;
@@ -748,15 +749,15 @@ public class UsersMasterMigration : MigrationService
         foreach (var (userId, roleId) in userRoles)
         {
             writer.StartRow();
-            writer.Write(userId, NpgsqlTypes.NpgsqlDbType.Integer); // user_id
-            writer.Write(roleId, NpgsqlTypes.NpgsqlDbType.Integer); // role_id
-            writer.Write(0, NpgsqlTypes.NpgsqlDbType.Integer); // created_by
-            writer.Write(now, NpgsqlTypes.NpgsqlDbType.TimestampTz); // created_date
-            writer.Write(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer); // modified_by
-            writer.Write(DBNull.Value, NpgsqlTypes.NpgsqlDbType.TimestampTz); // modified_date
-            writer.Write(false, NpgsqlTypes.NpgsqlDbType.Boolean); // is_deleted
-            writer.Write(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer); // deleted_by
-            writer.Write(DBNull.Value, NpgsqlTypes.NpgsqlDbType.TimestampTz); // deleted_date
+            writer.Write(userId, NpgsqlDbType.Integer); // user_id
+            writer.Write(roleId, NpgsqlDbType.Integer); // role_id
+            writer.Write(0, NpgsqlDbType.Integer); // created_by
+            writer.Write(now, NpgsqlDbType.TimestampTz); // created_date
+            writer.Write(DBNull.Value, NpgsqlDbType.Integer); // modified_by
+            writer.Write(DBNull.Value, NpgsqlDbType.TimestampTz); // modified_date
+            writer.Write(false, NpgsqlDbType.Boolean); // is_deleted
+            writer.Write(DBNull.Value, NpgsqlDbType.Integer); // deleted_by
+            writer.Write(DBNull.Value, NpgsqlDbType.TimestampTz); // deleted_date
             count++;
         }
 

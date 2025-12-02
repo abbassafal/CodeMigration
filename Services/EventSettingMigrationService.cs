@@ -1,0 +1,206 @@
+using Microsoft.Data.SqlClient;
+using Npgsql;
+using System.Data;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System;
+
+public class EventSettingMigrationService
+{
+    private readonly ILogger<EventSettingMigrationService> _logger;
+    private readonly IConfiguration _configuration;
+
+    public EventSettingMigrationService(IConfiguration configuration, ILogger<EventSettingMigrationService> logger)
+    {
+        _configuration = configuration;
+        _logger = logger;
+    }
+
+    public List<object> GetMappings()
+    {
+        return new List<object>
+        {
+            new { source = "EVENTID", target = "event_id", type = "int -> integer" },
+            new { source = "EventMode", target = "event_mode", type = "int -> text" },
+            new { source = "TiePreventLot", target = "tie_prevent_lot", type = "int -> boolean" },
+            new { source = "TiePreventItem", target = "tie_prevent_item", type = "int -> boolean" },
+            new { source = "IsTargetPriceApplicable", target = "target_price_applicable", type = "int -> boolean" },
+            new { source = "IsAutoExtendedEnable", target = "auto_extended_enable", type = "int -> boolean" },
+            new { source = "NoofTimesAutoExtended", target = "no_of_times_auto_extended", type = "int -> integer" },
+            new { source = "AutoExtendedMinutes", target = "auto_extended_minutes", type = "int -> integer" },
+            new { source = "ApplyExtendedTimes", target = "apply_extended_times", type = "int -> boolean" },
+            new { source = "GREENPERCENTAGE", target = "green_percentage", type = "decimal -> numeric" },
+            new { source = "YELLOWPERCENTAGE", target = "yellow_percentage", type = "decimal -> numeric" },
+            new { source = "IsItemLevelRankShow", target = "show_item_level_rank", type = "int -> boolean" },
+            new { source = "IsLotLevelRankShow", target = "show_lot_level_rank", type = "int -> boolean" },
+            new { source = "IsBasicPriceApplicable/IsLotLevelAuction", target = "basic_price_applicable", type = "conditional logic -> boolean" },
+            new { source = "IsBasicPriceValidationReq", target = "basic_price_validation_mandatory", type = "int -> boolean" },
+            new { source = "IsMinMaxBidApplicable", target = "min_max_bid_applicable", type = "int -> boolean" },
+            new { source = "IsLowestBidShow", target = "show_lower_bid", type = "int -> boolean" },
+            new { source = "BesideAuctionFirstBid", target = "apply_all_settings_in_price_bid", type = "int -> boolean" },
+            new { source = "MinBid", target = "min_lot_auction_bid_value", type = "int -> numeric" },
+            new { source = "MaxBid", target = "max_lot_auction_bid_value", type = "int -> numeric" },
+            new { source = "IsLotLevelAuction", target = "configure_lot_level_auction", type = "int -> boolean" },
+            new { source = "LotLevelBasicPrice", target = "lot_level_basic_price", type = "decimal -> numeric" },
+            new { source = "IsPriceBidAttachmentcompulsory", target = "price_bid_attachment_mandatory", type = "bit -> boolean" },
+            new { source = "IsDiscountApplicable", target = "discount_applicable", type = "int -> boolean" },
+            new { source = "IsGSTCompulsory", target = "gst_mandatory", type = "int -> boolean" },
+            new { source = "IsTechnicalAttachmentcompulsory", target = "technical_attachment_mandatory", type = "bit -> boolean" },
+            new { source = "IsProposedQty", target = "proposed_qty", type = "int -> boolean" },
+            new { source = "IsRedyStockmandatory", target = "ready_stock_mandatory", type = "int -> boolean" },
+            new { source = "default: 0", target = "created_by", type = "integer" },
+            new { source = "default: UTC now", target = "created_date", type = "timestamp with time zone" },
+            new { source = "default: 0", target = "lot_level_target_price", type = "numeric" },
+            new { source = "MinBidMode", target = "max_lot_bid_type", type = "int -> integer" },
+            new { source = "MaxBidMode", target = "min_lot_bid_type", type = "int -> integer" },
+            new { source = "default: false", target = "allow_currency_selection", type = "boolean" }
+        };
+    }
+
+    public async Task<int> MigrateAsync()
+    {
+        int migratedCount = 0;
+        using var sqlConnection = new SqlConnection(_configuration.GetConnectionString("SqlServer"));
+        using var pgConnection = new NpgsqlConnection(_configuration.GetConnectionString("PostgreSql"));
+        await sqlConnection.OpenAsync();
+        await pgConnection.OpenAsync();
+
+        var selectQuery = @"SELECT * FROM TBL_EVENTMASTER ORDER BY EVENTID";
+        using var sqlCmd = new SqlCommand(selectQuery, sqlConnection);
+        using var reader = await sqlCmd.ExecuteReaderAsync();
+
+        var copyCommand = @"COPY event_setting (
+            event_id, event_mode, tie_prevent_lot, tie_prevent_item, target_price_applicable,
+            auto_extended_enable, no_of_times_auto_extended, auto_extended_minutes, 
+            apply_extended_times, green_percentage, yellow_percentage, show_item_level_rank,
+            show_lot_level_rank, basic_price_applicable, basic_price_validation_mandatory,
+            min_max_bid_applicable, show_lower_bid, apply_all_settings_in_price_bid,
+            min_lot_auction_bid_value, max_lot_auction_bid_value, configure_lot_level_auction,
+            lot_level_basic_price, price_bid_attachment_mandatory, discount_applicable,
+            gst_mandatory, technical_attachment_mandatory, proposed_qty, ready_stock_mandatory,
+            created_by, created_date, modified_by, modified_date, deleted_by, deleted_date,
+            is_deleted, lot_level_target_price, max_lot_bid_type, min_lot_bid_type, 
+            allow_currency_selection
+        ) FROM STDIN (FORMAT TEXT, DELIMITER '|')";
+
+        using var writer = await pgConnection.BeginTextImportAsync(copyCommand);
+        var now = DateTime.UtcNow;
+
+        while (await reader.ReadAsync())
+        {
+            // Map and convert fields with null checks
+            var fields = new string[]
+            {
+                FormatInteger(reader["EVENTID"]),                  // event_id (integer, NOT NULL)
+                FormatValue(reader["EventMode"]),                  // event_mode (text)
+                Bool(reader["TiePreventLot"]),                     // tie_prevent_lot (boolean)
+                Bool(reader["TiePreventItem"]),                    // tie_prevent_item (boolean)
+                Bool(reader["IsTargetPriceApplicable"]),           // target_price_applicable (boolean)
+                Bool(reader["IsAutoExtendedEnable"]),              // auto_extended_enable (boolean)
+                FormatInteger(reader["NoofTimesAutoExtended"]),    // no_of_times_auto_extended (integer, NOT NULL)
+                FormatInteger(reader["AutoExtendedMinutes"]),      // auto_extended_minutes (integer, NOT NULL)
+                Bool(reader["ApplyExtendedTimes"]),                // apply_extended_times (boolean)
+                FormatNumeric(reader["GREENPERCENTAGE"]),          // green_percentage (numeric)
+                FormatNumeric(reader["YELLOWPERCENTAGE"]),         // yellow_percentage (numeric)
+                Bool(reader["IsItemLevelRankShow"]),               // show_item_level_rank (boolean)
+                Bool(reader["IsLotLevelRankShow"]),                // show_lot_level_rank (boolean)
+                ConditionalBool(reader["IsLotLevelAuction"], reader["IsBasicPriceApplicable"]), // basic_price_applicable (conditional)
+                Bool(reader["IsBasicPriceValidationReq"]),         // basic_price_validation_mandatory (boolean)
+                Bool(reader["IsMinMaxBidApplicable"]),             // min_max_bid_applicable (boolean)
+                Bool(reader["IsLowestBidShow"]),                   // show_lower_bid (boolean)
+                Bool(reader["BesideAuctionFirstBid"]),             // apply_all_settings_in_price_bid (boolean)
+                FormatNumeric(reader["MinBid"]),                   // min_lot_auction_bid_value (numeric)
+                FormatNumeric(reader["MaxBid"]),                   // max_lot_auction_bid_value (numeric)
+                Bool(reader["IsLotLevelAuction"]),                 // configure_lot_level_auction (boolean)
+                FormatNumeric(reader["LotLevelBasicPrice"]),       // lot_level_basic_price (numeric)
+                Bool(reader["IsPriceBidAttachmentcompulsory"]),    // price_bid_attachment_mandatory (boolean)
+                Bool(reader["IsDiscountApplicable"]),              // discount_applicable (boolean)
+                Bool(reader["IsGSTCompulsory"]),                   // gst_mandatory (boolean)
+                Bool(reader["IsTechnicalAttachmentcompulsory"]),   // technical_attachment_mandatory (boolean)
+                Bool(reader["IsProposedQty"]),                     // proposed_qty (boolean)
+                Bool(reader["IsRedyStockmandatory"]),              // ready_stock_mandatory (boolean)
+                "0",                                               // created_by (integer)
+                now.ToString("yyyy-MM-dd HH:mm:ss.ffffff+00"),     // created_date (timestamp)
+                @"\N",                                             // modified_by (integer, nullable)
+                @"\N",                                             // modified_date (timestamp, nullable)
+                @"\N",                                             // deleted_by (integer, nullable)
+                @"\N",                                             // deleted_date (timestamp, nullable)
+                "f",                                               // is_deleted (boolean)
+                "0",                                               // lot_level_target_price (numeric)
+                FormatInteger(reader["MinBidMode"]),               // max_lot_bid_type (integer)
+                FormatInteger(reader["MaxBidMode"]),               // min_lot_bid_type (integer)
+                "f"                                                // allow_currency_selection (boolean)
+            };
+            var row = string.Join("|", fields);
+            await writer.WriteLineAsync(row);
+            migratedCount++;
+        }
+        writer.Close();
+        _logger.LogInformation($"Migrated {migratedCount} event_setting records.");
+        return migratedCount;
+    }
+
+    // Helper method to format general values (handles NULL)
+    private static string FormatValue(object? value)
+    {
+        if (value == null || value == DBNull.Value)
+            return @"\N";
+        
+        var str = value.ToString();
+        if (string.IsNullOrEmpty(str))
+            return @"\N";
+        
+        // Escape special characters for COPY TEXT format with pipe delimiter
+        return str
+            .Replace("\\", "\\\\")   // Backslash must be first
+            .Replace("|", "\\|")     // Pipe (our delimiter)
+            .Replace("\t", "\\t")    // Tab
+            .Replace("\n", "\\n")    // Newline
+            .Replace("\r", "\\r");   // Carriage return
+    }
+
+    // Helper method specifically for integer fields (NOT NULL columns)
+    private static string FormatInteger(object? value)
+    {
+        if (value == null || value == DBNull.Value)
+            return "0";  // Return 0 instead of \N for NOT NULL columns
+        
+        var str = value.ToString();
+        if (string.IsNullOrWhiteSpace(str))
+            return "0";
+        
+        return str;
+    }
+
+    // Helper method specifically for numeric fields (NOT NULL columns)
+    private static string FormatNumeric(object? value)
+    {
+        if (value == null || value == DBNull.Value)
+            return "0";  // Return 0 instead of \N for NOT NULL columns
+        
+        var str = value.ToString();
+        if (string.IsNullOrWhiteSpace(str))
+            return "0";
+        
+        return str;
+    }
+
+    // Helper method for boolean conversion
+    private static string Bool(object? value)
+    {
+        if (value == null || value == DBNull.Value) return "f";
+        var v = value.ToString();
+        return (v == "1" || v == "True" || v == "true") ? "t" : "f";
+    }
+
+    // Helper method for conditional boolean logic
+    private static string ConditionalBool(object? lotLevelAuction, object? basicPriceApplicable)
+    {
+        // If IsLotLevelAuction == 1, return true, else use IsBasicPriceApplicable
+        var lotLevel = lotLevelAuction?.ToString();
+        if (lotLevel == "1" || lotLevel == "True" || lotLevel == "true")
+            return "t";
+        
+        return Bool(basicPriceApplicable);
+    }
+}

@@ -53,6 +53,8 @@ public class MigrationController : Controller
     private readonly PRAttachmentMigration _prAttachmentMigration;
     private readonly PRBoqItemsMigration _prBoqItemsMigration;
     private readonly IConfiguration _configuration;
+    private readonly EventSettingMigrationService _eventSettingMigrationService;
+    private readonly ILogger<MigrationController> _logger;
 
 
     public MigrationController(
@@ -78,7 +80,10 @@ public class MigrationController : Controller
         WorkflowAmountHistoryMigration workflowAmountHistoryMigration,
         WorkflowApprovalUserMigration workflowApprovalUserMigration,
         WorkflowApprovalUserHistoryMigration workflowApprovalUserHistoryMigration,
-        IHubContext<MigrationProgressHub> hubContext)
+        IHubContext<MigrationProgressHub> hubContext,
+        IConfiguration configuration,
+        EventSettingMigrationService eventSettingMigrationService,
+        ILogger<MigrationController> logger)
     {
         _uomMigration = uomMigration;
         _plantMigration = plantMigration;
@@ -103,6 +108,9 @@ public class MigrationController : Controller
         _workflowApprovalUserMigration = workflowApprovalUserMigration;
         _workflowApprovalUserHistoryMigration = workflowApprovalUserHistoryMigration;
         _hubContext = hubContext;
+        _configuration = configuration;
+        _eventSettingMigrationService = eventSettingMigrationService;
+        _logger = logger;
     }
 
     public IActionResult Index()
@@ -152,8 +160,9 @@ public class MigrationController : Controller
             new { name = "workflowhistorytable", description = "TBL_WORKFLOW_HISTORY to workflow_history" },
             new { name = "workflowamount", description = "TBL_WorkFlowSub to workflow_amount" },
             new { name = "workflowamounthistory", description = "TBL_WorkFlowSub_History to workflow_amount_history" },
-            new { name = "workflowapprovaluser", description = "TBL_WorkflowApprovalUser to workflow_approval_user" },
-            new { name = "workflowapprovaluserhistory", description = "TBL_WorkflowApprovalUserHistory to workflow_approval_user_history" }
+            new { name = "workflowapprovaluser", description = "TBL_WorkFlowSubSub to workflow_approval_user" },
+            new { name = "workflowapprovaluserhistory", description = "TBL_WorkFlowSubSub_History to workflow_approval_user_history" },
+            new { name = "eventsetting", description = "TBL_EVENTMASTER to event_setting" },
         };
         return Json(tables);
     }
@@ -1086,16 +1095,22 @@ public class MigrationController : Controller
                 { "currency", "currency_master" },
                 { "country", "country_master" },
                 { "material_group", "material_group_master" },
+                { "materialgroup", "material_group_master" },
                 { "purchase_group", "purchase_group_master" },
+                { "purchasegroup", "purchase_group_master" },
                 { "payment_term", "payment_term_master" },
+                { "paymentterm", "payment_term_master" },
                 { "material", "material_master" },
                 { "event", "event_master" },
+                { "eventmaster", "event_master" },
                 { "tax", "tax_master" },
                 { "users", "users" },
                 { "erp_pr_lines", "erp_pr_lines" },
                 { "incoterm", "incoterm_master" },
                 { "po_doc_type", "po_doc_type_master" },
+                { "podoctype", "po_doc_type_master" },
                 { "po_condition", "po_condition_master" },
+                { "pocondition", "po_condition_master" },
                 { "workflow", "workflow_master" },
                 { "workflow_history", "workflow_master_history" },
                 { "workflow_history_table", "workflow_history" },
@@ -1105,7 +1120,7 @@ public class MigrationController : Controller
                 { "workflow_approval_user_history", "workflow_approval_user_history" }
             };
 
-            if (!tableMapping.TryGetValue(table, out var pgTableName))
+            if (!tableMapping.TryGetValue(table.ToLower(), out var pgTableName))
             {
                 return Json(new { success = false, error = $"Unknown table: {table}" });
             }
@@ -1116,6 +1131,24 @@ public class MigrationController : Controller
             using (var conn = new Npgsql.NpgsqlConnection(connectionString))
             {
                 await conn.OpenAsync();
+                
+                // Special handling for event_master - also truncate event_setting
+                if (pgTableName == "event_master")
+                {
+                    // Truncate event_setting first (child table)
+                    using (var cmdSetting = new Npgsql.NpgsqlCommand("TRUNCATE TABLE event_setting CASCADE", conn))
+                    {
+                        await cmdSetting.ExecuteNonQueryAsync();
+                    }
+                    
+                    // Then truncate event_master
+                    using (var cmdMaster = new Npgsql.NpgsqlCommand("TRUNCATE TABLE event_master CASCADE", conn))
+                    {
+                        await cmdMaster.ExecuteNonQueryAsync();
+                    }
+                    
+                    return Json(new { success = true, message = "Tables 'event_master' and 'event_setting' truncated successfully (CASCADE)" });
+                }
                 
                 // Use TRUNCATE CASCADE to handle foreign key constraints
                 var truncateCommand = $"TRUNCATE TABLE {pgTableName} CASCADE";
@@ -1131,6 +1164,21 @@ public class MigrationController : Controller
         catch (Exception ex)
         {
             return Json(new { success = false, error = ex.Message });
+        }
+    }
+
+    [HttpPost("event-setting/migrate")]
+    public async Task<IActionResult> MigrateEventSettings()
+    {
+        try
+        {
+            var migratedCount = await _eventSettingMigrationService.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_setting records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_setting migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
         }
     }
 }

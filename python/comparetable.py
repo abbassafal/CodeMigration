@@ -31,18 +31,28 @@ print(f"  MSSQL: {mssql_table}")
 print(f"  PostgreSQL: {pg_table}")
 
 try:
-    # Get MSSQL columns
+    # Get MSSQL columns with constraints and foreign keys
     print("\n[3/3] Fetching table structures...")
     
     # Use direct cursor approach for better control
     cursor = mssql_conn.cursor()
     cursor.execute("""
         SELECT 
-            COLUMN_NAME,
-            DATA_TYPE
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_NAME = ? AND TABLE_SCHEMA = 'dbo'
-        ORDER BY ORDINAL_POSITION
+            c.COLUMN_NAME,
+            c.DATA_TYPE,
+            CASE WHEN c.IS_NULLABLE = 'NO' THEN 'NOT NULL' ELSE 'NULLABLE' END AS NULLABLE,
+            ISNULL(fk.FK_INFO, '') AS FOREIGN_KEY
+        FROM INFORMATION_SCHEMA.COLUMNS c
+        LEFT JOIN (
+            SELECT 
+                fk.parent_object_id,
+                COL_NAME(fkc.parent_object_id, fkc.parent_column_id) AS column_name,
+                OBJECT_NAME(fk.referenced_object_id) + '(' + COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id) + ')' AS FK_INFO
+            FROM sys.foreign_keys fk
+            INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+        ) fk ON c.TABLE_NAME = OBJECT_NAME(fk.parent_object_id) AND c.COLUMN_NAME = fk.column_name
+        WHERE c.TABLE_NAME = ? AND c.TABLE_SCHEMA = 'dbo'
+        ORDER BY c.ORDINAL_POSITION
     """, (mssql_table,))
     
     mssql_rows = cursor.fetchall()
@@ -58,21 +68,42 @@ try:
     # Convert to DataFrame - handle the cursor result properly
     mssql_data = []
     for row in mssql_rows:
-        mssql_data.append({'COLUMN_NAME': row[0], 'DATA_TYPE': row[1]})
+        mssql_data.append({
+            'COLUMN_NAME': row[0], 
+            'DATA_TYPE': row[1],
+            'NULLABLE': row[2],
+            'FOREIGN_KEY': row[3] if row[3] else ''
+        })
     df_mssql = pd.DataFrame(mssql_data)
     
     print(f"✓ MSSQL: {len(df_mssql)} columns")
     
-    # Get PostgreSQL columns using cursor approach
+    # Get PostgreSQL columns using cursor approach with constraints and foreign keys
     cursor = pg_conn.cursor()
     cursor.execute("""
         SELECT 
-            column_name,
-            data_type
-        FROM information_schema.columns
-        WHERE table_name = %s AND table_schema = 'public'
-        ORDER BY ordinal_position
-    """, (pg_table,))
+            c.column_name,
+            c.data_type,
+            CASE WHEN c.is_nullable = 'NO' THEN 'NOT NULL' ELSE 'NULLABLE' END AS nullable,
+            COALESCE(
+                (SELECT ccu.table_name || '(' || ccu.column_name || ')'
+                 FROM information_schema.table_constraints tc
+                 JOIN information_schema.key_column_usage kcu 
+                   ON tc.constraint_name = kcu.constraint_name
+                   AND tc.table_schema = kcu.table_schema
+                 JOIN information_schema.constraint_column_usage ccu 
+                   ON ccu.constraint_name = tc.constraint_name
+                   AND ccu.table_schema = tc.table_schema
+                 WHERE tc.constraint_type = 'FOREIGN KEY'
+                   AND tc.table_name = %s
+                   AND kcu.column_name = c.column_name
+                   AND tc.table_schema = 'public'
+                 LIMIT 1), ''
+            ) AS foreign_key
+        FROM information_schema.columns c
+        WHERE c.table_name = %s AND c.table_schema = 'public'
+        ORDER BY c.ordinal_position
+    """, (pg_table, pg_table))
     
     pg_rows = cursor.fetchall()
     cursor.close()
@@ -87,7 +118,12 @@ try:
     # Convert to DataFrame - handle the cursor result properly
     pg_data = []
     for row in pg_rows:
-        pg_data.append({'column_name': row[0], 'data_type': row[1]})
+        pg_data.append({
+            'column_name': row[0], 
+            'data_type': row[1],
+            'nullable': row[2],
+            'foreign_key': row[3] if row[3] else ''
+        })
     df_pg = pd.DataFrame(pg_data)
     
     print(f"✓ PostgreSQL: {len(df_pg)} columns")
@@ -104,9 +140,13 @@ try:
         if i < len(df_mssql):
             row_data['MSSQL_COLUMN_NAME'] = df_mssql.iloc[i]['COLUMN_NAME']
             row_data['MSSQL_DATA_TYPE'] = df_mssql.iloc[i]['DATA_TYPE']
+            row_data['MSSQL_NULLABLE'] = df_mssql.iloc[i]['NULLABLE']
+            row_data['MSSQL_FOREIGN_KEY'] = df_mssql.iloc[i]['FOREIGN_KEY']
         else:
             row_data['MSSQL_COLUMN_NAME'] = ''
             row_data['MSSQL_DATA_TYPE'] = ''
+            row_data['MSSQL_NULLABLE'] = ''
+            row_data['MSSQL_FOREIGN_KEY'] = ''
         
         # Empty separator column
         row_data['SEPARATOR'] = ''
@@ -115,9 +155,13 @@ try:
         if i < len(df_pg):
             row_data['PG_column_name'] = df_pg.iloc[i]['column_name']
             row_data['PG_data_type'] = df_pg.iloc[i]['data_type']
+            row_data['PG_nullable'] = df_pg.iloc[i]['nullable']
+            row_data['PG_foreign_key'] = df_pg.iloc[i]['foreign_key']
         else:
             row_data['PG_column_name'] = ''
             row_data['PG_data_type'] = ''
+            row_data['PG_nullable'] = ''
+            row_data['PG_foreign_key'] = ''
         
         comparison_data.append(row_data)
     
@@ -136,18 +180,18 @@ try:
         
         # Add table names in first row
         worksheet['A1'] = f'mssql - {mssql_table}'
-        worksheet['D1'] = f'postgres - {pg_table}'
+        worksheet['F1'] = f'postgres - {pg_table}'
         
         # Merge cells for headers
-        worksheet.merge_cells('A1:B1')
-        worksheet.merge_cells('D1:E1')
+        worksheet.merge_cells('A1:D1')
+        worksheet.merge_cells('F1:I1')
         
         # Style the header row (table names)
         header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         header_font = Font(bold=True, color="FFFFFF", size=12)
         center_align = Alignment(horizontal='center', vertical='center')
         
-        for cell in ['A1', 'D1']:
+        for cell in ['A1', 'F1']:
             worksheet[cell].fill = header_fill
             worksheet[cell].font = header_font
             worksheet[cell].alignment = center_align
@@ -159,21 +203,29 @@ try:
         # Rename column headers
         worksheet['A2'] = 'COLUMN_NAME'
         worksheet['B2'] = 'DATA_TYPE'
-        worksheet['C2'] = ''
-        worksheet['D2'] = 'column_name'
-        worksheet['E2'] = 'data_type'
+        worksheet['C2'] = 'NULLABLE'
+        worksheet['D2'] = 'FOREIGN_KEY'
+        worksheet['E2'] = ''
+        worksheet['F2'] = 'column_name'
+        worksheet['G2'] = 'data_type'
+        worksheet['H2'] = 'nullable'
+        worksheet['I2'] = 'foreign_key'
         
-        for cell in ['A2', 'B2', 'D2', 'E2']:
+        for cell in ['A2', 'B2', 'C2', 'D2', 'F2', 'G2', 'H2', 'I2']:
             worksheet[cell].fill = col_header_fill
             worksheet[cell].font = col_header_font
             worksheet[cell].alignment = center_align
         
         # Set column widths
-        worksheet.column_dimensions['A'].width = 20
+        worksheet.column_dimensions['A'].width = 25
         worksheet.column_dimensions['B'].width = 18
-        worksheet.column_dimensions['C'].width = 3
-        worksheet.column_dimensions['D'].width = 25
-        worksheet.column_dimensions['E'].width = 25
+        worksheet.column_dimensions['C'].width = 12
+        worksheet.column_dimensions['D'].width = 30
+        worksheet.column_dimensions['E'].width = 3
+        worksheet.column_dimensions['F'].width = 28
+        worksheet.column_dimensions['G'].width = 25
+        worksheet.column_dimensions['H'].width = 12
+        worksheet.column_dimensions['I'].width = 35
         
         # Add borders
         thin_border = Border(
@@ -183,26 +235,48 @@ try:
             bottom=Side(style='thin')
         )
         
-        for row in worksheet.iter_rows(min_row=1, max_row=max_rows+2, min_col=1, max_col=5):
+        for row in worksheet.iter_rows(min_row=1, max_row=max_rows+2, min_col=1, max_col=9):
             for cell in row:
-                if cell.column != 3:  # Skip separator column
+                if cell.column != 5:  # Skip separator column E
                     cell.border = thin_border
-                    cell.alignment = Alignment(vertical='center')
+                    cell.alignment = Alignment(vertical='center', wrap_text=True)
         
-        # Make separator column C gray
+        # Make separator column E gray
         gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
         for row in range(1, max_rows + 3):
-            worksheet[f'C{row}'].fill = gray_fill
+            worksheet[f'E{row}'].fill = gray_fill
+        
+        # Highlight NOT NULL cells in light green
+        not_null_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+        for row in range(3, max_rows + 3):  # Start from row 3 (after headers)
+            # MSSQL NOT NULL
+            if worksheet[f'C{row}'].value == 'NOT NULL':
+                worksheet[f'C{row}'].fill = not_null_fill
+            # PostgreSQL NOT NULL
+            if worksheet[f'H{row}'].value == 'NOT NULL':
+                worksheet[f'H{row}'].fill = not_null_fill
+        
+        # Highlight cells with foreign keys in light blue
+        fk_fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
+        for row in range(3, max_rows + 3):
+            # MSSQL FK
+            if worksheet[f'D{row}'].value and str(worksheet[f'D{row}'].value).strip():
+                worksheet[f'D{row}'].fill = fk_fill
+            # PostgreSQL FK
+            if worksheet[f'I{row}'].value and str(worksheet[f'I{row}'].value).strip():
+                worksheet[f'I{row}'].fill = fk_fill
     
     print("\n" + "=" * 80)
     print("✓ COMPARISON COMPLETE!")
     print("=" * 80)
-    print(f"\n✓ Simple side-by-side comparison saved to:")
+    print(f"\n✓ Enhanced comparison saved to:")
     print(f"  {output_file}")
     print(f"\nFormat:")
-    print(f"  - MSSQL columns on the left")
-    print(f"  - PostgreSQL columns on the right")
-    print(f"  - Clean, formatted Excel sheet")
+    print(f"  - MSSQL columns on the left (COLUMN_NAME, DATA_TYPE, NULLABLE, FOREIGN_KEY)")
+    print(f"  - PostgreSQL columns on the right (column_name, data_type, nullable, foreign_key)")
+    print(f"  - NOT NULL columns highlighted in light green")
+    print(f"  - Foreign key columns highlighted in light blue")
+    print(f"  - Clean, formatted Excel sheet with all constraints visible")
 
 except Exception as e:
     print(f"\n✗ Comparison Failed!")
