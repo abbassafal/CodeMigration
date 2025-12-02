@@ -82,7 +82,7 @@ public class WorkflowApprovalUserMigration : MigrationService
                         pgCmd.Transaction = transaction;
                     }
 
-                    // Map fields
+                    // Map fields with validation
                     var autoID = reader.IsDBNull(reader.GetOrdinal("AutoID")) ? 0 : Convert.ToInt32(reader["AutoID"]);
                     var workFlowMainId = reader.IsDBNull(reader.GetOrdinal("WorkFlowMainId")) ? 0 : Convert.ToInt32(reader["WorkFlowMainId"]);
                     var workFlowSubId = reader.IsDBNull(reader.GetOrdinal("WorkFlowSubId")) ? 0 : Convert.ToInt32(reader["WorkFlowSubId"]);
@@ -90,6 +90,55 @@ public class WorkflowApprovalUserMigration : MigrationService
                     var level = reader.IsDBNull(reader.GetOrdinal("Level")) ? 0 : Convert.ToInt32(reader["Level"]);
                     var createdBy = reader.IsDBNull(reader.GetOrdinal("CreatedBy")) ? 0 : Convert.ToInt32(reader["CreatedBy"]);
                     var createDate = reader.IsDBNull(reader.GetOrdinal("CreateDate")) ? DateTime.UtcNow : Convert.ToDateTime(reader["CreateDate"]);
+
+                    // Validate required fields
+                    if (autoID <= 0)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: Invalid AutoID ({autoID})");
+                        continue;
+                    }
+                    
+                    if (workFlowMainId <= 0)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: Invalid WorkFlowMainId ({workFlowMainId})");
+                        continue;
+                    }
+                    
+                    if (workFlowSubId <= 0)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: Invalid WorkFlowSubId ({workFlowSubId})");
+                        continue;
+                    }
+
+                    // Check if workflow_master_id exists in workflow_master table
+                    using var checkMasterCmd = new NpgsqlCommand("SELECT 1 FROM workflow_master WHERE workflow_id = @workflow_id LIMIT 1", pgConn);
+                    if (transaction != null)
+                    {
+                        checkMasterCmd.Transaction = transaction;
+                    }
+                    checkMasterCmd.Parameters.AddWithValue("@workflow_id", workFlowMainId);
+                    
+                    var masterExists = await checkMasterCmd.ExecuteScalarAsync();
+                    if (masterExists == null)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: WorkFlowMainId ({workFlowMainId}) not found in workflow_master table");
+                        continue;
+                    }
+
+                    // Check if workflow_amount_id exists in workflow_amount table
+                    using var checkAmountCmd = new NpgsqlCommand("SELECT 1 FROM workflow_amount WHERE workflow_amount_id = @workflow_amount_id LIMIT 1", pgConn);
+                    if (transaction != null)
+                    {
+                        checkAmountCmd.Transaction = transaction;
+                    }
+                    checkAmountCmd.Parameters.AddWithValue("@workflow_amount_id", workFlowSubId);
+                    
+                    var amountExists = await checkAmountCmd.ExecuteScalarAsync();
+                    if (amountExists == null)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: WorkFlowSubId ({workFlowSubId}) not found in workflow_amount table");
+                        continue;
+                    }
 
                     // Convert ApprovedBy to array format
                     int[] approvedByArray = { approvedBy };
@@ -114,14 +163,15 @@ public class WorkflowApprovalUserMigration : MigrationService
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error processing record {processedCount}: {ex.Message}");
+                    Console.WriteLine($"Record details - AutoID: {(reader.IsDBNull(reader.GetOrdinal("AutoID")) ? "NULL" : reader["AutoID"].ToString())}");
                     
-                    // If using transaction and it's aborted, we need to stop processing
-                    if (transaction != null && ex.Message.Contains("current transaction is aborted"))
+                    // If using transaction, any error aborts the transaction
+                    if (transaction != null)
                     {
-                        Console.WriteLine("Transaction is aborted. Rolling back and stopping migration.");
-                        throw; // Re-throw to trigger rollback
+                        Console.WriteLine("Error occurred in transaction context. Rolling back and stopping migration.");
+                        throw; // Re-throw to trigger rollback in the base class
                     }
-                    // Continue with next record for non-transactional operations
+                    // For non-transactional operations, continue with next record
                 }
             }
         }

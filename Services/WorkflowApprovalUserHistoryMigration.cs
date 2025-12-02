@@ -84,7 +84,7 @@ public class WorkflowApprovalUserHistoryMigration : MigrationService
                         pgCmd.Transaction = transaction;
                     }
 
-                    // Map fields
+                    // Map fields with validation
                     var workFlowSubSubHistoryId = reader.IsDBNull(reader.GetOrdinal("WorkFlowSubSubHistoryId")) ? 0 : Convert.ToInt32(reader["WorkFlowSubSubHistoryId"]);
                     var workFlowSubSubId = reader.IsDBNull(reader.GetOrdinal("WorkFlowSubSubId")) ? 0 : Convert.ToInt32(reader["WorkFlowSubSubId"]);
                     var workFlowMainId = reader.IsDBNull(reader.GetOrdinal("WorkFlowMainId")) ? 0 : Convert.ToInt32(reader["WorkFlowMainId"]);
@@ -93,6 +93,76 @@ public class WorkflowApprovalUserHistoryMigration : MigrationService
                     var level = reader.IsDBNull(reader.GetOrdinal("Level")) ? 0 : Convert.ToInt32(reader["Level"]);
                     var createdBy = reader.IsDBNull(reader.GetOrdinal("CreatedBy")) ? 0 : Convert.ToInt32(reader["CreatedBy"]);
                     var createDate = reader.IsDBNull(reader.GetOrdinal("CreateDate")) ? DateTime.UtcNow : Convert.ToDateTime(reader["CreateDate"]);
+
+                    // Validate required fields
+                    if (workFlowSubSubHistoryId <= 0)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: Invalid WorkFlowSubSubHistoryId ({workFlowSubSubHistoryId})");
+                        continue;
+                    }
+                    
+                    if (workFlowSubSubId <= 0)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: Invalid WorkFlowSubSubId ({workFlowSubSubId})");
+                        continue;
+                    }
+                    
+                    if (workFlowMainId <= 0)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: Invalid WorkFlowMainId ({workFlowMainId})");
+                        continue;
+                    }
+                    
+                    if (workFlowSubId <= 0)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: Invalid WorkFlowSubId ({workFlowSubId})");
+                        continue;
+                    }
+
+                    // Check if workflow_master_id exists
+                    using var checkMasterCmd = new NpgsqlCommand("SELECT 1 FROM workflow_master WHERE workflow_id = @workflow_id LIMIT 1", pgConn);
+                    if (transaction != null)
+                    {
+                        checkMasterCmd.Transaction = transaction;
+                    }
+                    checkMasterCmd.Parameters.AddWithValue("@workflow_id", workFlowMainId);
+                    
+                    var masterExists = await checkMasterCmd.ExecuteScalarAsync();
+                    if (masterExists == null)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: WorkFlowMainId ({workFlowMainId}) not found in workflow_master table");
+                        continue;
+                    }
+
+                    // Check if workflow_amount_id exists
+                    using var checkAmountCmd = new NpgsqlCommand("SELECT 1 FROM workflow_amount WHERE workflow_amount_id = @workflow_amount_id LIMIT 1", pgConn);
+                    if (transaction != null)
+                    {
+                        checkAmountCmd.Transaction = transaction;
+                    }
+                    checkAmountCmd.Parameters.AddWithValue("@workflow_amount_id", workFlowSubId);
+                    
+                    var amountExists = await checkAmountCmd.ExecuteScalarAsync();
+                    if (amountExists == null)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: WorkFlowSubId ({workFlowSubId}) not found in workflow_amount table");
+                        continue;
+                    }
+
+                    // Check if workflow_approval_user_id exists
+                    using var checkUserCmd = new NpgsqlCommand("SELECT 1 FROM workflow_approval_user WHERE workflow_approval_user_id = @workflow_approval_user_id LIMIT 1", pgConn);
+                    if (transaction != null)
+                    {
+                        checkUserCmd.Transaction = transaction;
+                    }
+                    checkUserCmd.Parameters.AddWithValue("@workflow_approval_user_id", workFlowSubSubId);
+                    
+                    var userExists = await checkUserCmd.ExecuteScalarAsync();
+                    if (userExists == null)
+                    {
+                        Console.WriteLine($"Skipping record {processedCount}: WorkFlowSubSubId ({workFlowSubSubId}) not found in workflow_approval_user table");
+                        continue;
+                    }
 
                     // Convert ApprovedBy to array format
                     int[] approvedByArray = { approvedBy };
@@ -118,14 +188,15 @@ public class WorkflowApprovalUserHistoryMigration : MigrationService
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error processing record {processedCount}: {ex.Message}");
+                    Console.WriteLine($"Record details - WorkFlowSubSubHistoryId: {(reader.IsDBNull(reader.GetOrdinal("WorkFlowSubSubHistoryId")) ? "NULL" : reader["WorkFlowSubSubHistoryId"].ToString())}");
                     
-                    // If using transaction and it's aborted, we need to stop processing
-                    if (transaction != null && ex.Message.Contains("current transaction is aborted"))
+                    // If using transaction, any error aborts the transaction
+                    if (transaction != null)
                     {
-                        Console.WriteLine("Transaction is aborted. Rolling back and stopping migration.");
-                        throw; // Re-throw to trigger rollback
+                        Console.WriteLine("Error occurred in transaction context. Rolling back and stopping migration.");
+                        throw; // Re-throw to trigger rollback in the base class
                     }
-                    // Continue with next record for non-transactional operations
+                    // For non-transactional operations, continue with next record
                 }
             }
         }

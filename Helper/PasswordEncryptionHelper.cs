@@ -8,9 +8,15 @@ namespace DataMigration.Helper
     {
         private const int SaltSize = 16;
         private const int KeySize = 32;
-        private const int Iterations = 1500000; // Increased from 10000 for better security
+        private const int Iterations = 15000; // Increased from 10000 for better security
 
         public static (string Hash, string Salt) EncryptPassword(string password)
+        {
+            return EncryptPassword(password, Iterations);
+        }
+
+        // Overload that allows specifying iteration count (for fast migration mode)
+        public static (string Hash, string Salt) EncryptPassword(string password, int iterations)
         {
             if (string.IsNullOrEmpty(password))
                 throw new ArgumentNullException(nameof(password), "Password cannot be null or empty");
@@ -21,7 +27,7 @@ namespace DataMigration.Helper
             rng.GetBytes(saltBytes);
 
             // Hash the password with the salt
-            using var deriveBytes = new Rfc2898DeriveBytes(password, saltBytes, Iterations, HashAlgorithmName.SHA256);
+            using var deriveBytes = new Rfc2898DeriveBytes(password, saltBytes, iterations, HashAlgorithmName.SHA256);
             byte[] hashBytes = deriveBytes.GetBytes(KeySize);
 
             // Return base64-encoded versions
@@ -47,27 +53,27 @@ namespace DataMigration.Helper
         public static async Task<bool> VerifyPassword(string password, string storedHash, string storedSalt)
         {
             if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
-            return false;
+                return false;
 
             try
             {
-            return await Task.Run(() =>
-            {
-                byte[] saltBytes = Convert.FromBase64String(storedSalt);
-                byte[] storedHashBytes = Convert.FromBase64String(storedHash);
+                return await Task.Run(() =>
+                {
+                    byte[] saltBytes = Convert.FromBase64String(storedSalt);
+                    byte[] storedHashBytes = Convert.FromBase64String(storedHash);
 
-                // Re-generate hash with the same salt
-                using var deriveBytes = new Rfc2898DeriveBytes(password, saltBytes, Iterations, HashAlgorithmName.SHA256);
-                byte[] testHashBytes = deriveBytes.GetBytes(KeySize);
+                    // Re-generate hash with the same salt
+                    using var deriveBytes = new Rfc2898DeriveBytes(password, saltBytes, Iterations, HashAlgorithmName.SHA256);
+                    byte[] testHashBytes = deriveBytes.GetBytes(KeySize);
 
-                // Compare byte-by-byte in constant time to prevent timing attacks
-                return CryptographicOperations.FixedTimeEquals(testHashBytes, storedHashBytes);
-            });
+                    // Compare byte-by-byte in constant time to prevent timing attacks
+                    return CryptographicOperations.FixedTimeEquals(testHashBytes, storedHashBytes);
+                });
             }
             catch (Exception)
             {
-            // If there's any error (like invalid base64 strings), return false
-            return false;
+                // If there's any error (like invalid base64 strings), return false
+                return false;
             }
         }
 

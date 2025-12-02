@@ -714,6 +714,9 @@
                             '<button class="btn btn-outline-warning btn-sm me-2" onclick="validateSourceData(\'' + table + '\')">' +
                                 '<i class="fas fa-check-circle"></i> Validate Data' +
                             '</button>' +
+                            '<button class="btn btn-outline-danger btn-sm" onclick="truncateTable(\'' + table + '\')">' +
+                                '<i class="fas fa-trash-alt"></i> Truncate Table' +
+                            '</button>' +
                         '</div>' +
                         '<button class="btn-migrate" id="migrate' + table + 'Btn" onclick="startMigration(\'' + table + '\')">' +
                             '<i class="fas fa-play"></i>' +
@@ -888,6 +891,40 @@
             })
             .catch(error => {
                 const message = document.getElementById(table + 'Message');
+                message.className = 'alert alert-danger';
+                message.innerHTML = '<strong><i class="fas fa-exclamation-triangle"></i> Network Error:</strong> ' + error.message;
+                message.classList.remove('d-none');
+            });
+        }
+
+        function truncateTable(table) {
+            if (!confirm(`Are you sure you want to TRUNCATE the '${table}' table in PostgreSQL?\n\nThis will:\n• Delete ALL records from the table\n• CASCADE to dependent tables (if applicable)\n• CANNOT be undone\n\nProceed?`)) {
+                return;
+            }
+
+            const message = document.getElementById(table + 'Message');
+            message.className = 'alert alert-info';
+            message.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Truncating table...';
+            message.classList.remove('d-none');
+
+            fetch(`/Migration/truncate-table/${table}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    message.className = 'alert alert-success';
+                    message.innerHTML = '<strong><i class="fas fa-check-circle"></i> Success!</strong> Table truncated successfully: ' + data.message;
+                } else {
+                    message.className = 'alert alert-danger';
+                    message.innerHTML = '<strong><i class="fas fa-exclamation-triangle"></i> Error:</strong> ' + data.error;
+                }
+                message.classList.remove('d-none');
+            })
+            .catch(error => {
                 message.className = 'alert alert-danger';
                 message.innerHTML = '<strong><i class="fas fa-exclamation-triangle"></i> Network Error:</strong> ' + error.message;
                 message.classList.remove('d-none');

@@ -28,6 +28,7 @@ public class MigrationController : Controller
     private readonly POConditionMasterMigration _poConditionMigration;
     private readonly WorkflowMasterMigration _workflowMigration;
     private readonly WorkflowMasterHistoryMigration _workflowHistoryMigration;
+    private readonly WorkflowHistoryMigration _workflowHistoryTableMigration;
     private readonly WorkflowAmountMigration _workflowAmountMigration;
     private readonly WorkflowAmountHistoryMigration _workflowAmountHistoryMigration;
     private readonly WorkflowApprovalUserMigration _workflowApprovalUserMigration;
@@ -51,6 +52,7 @@ public class MigrationController : Controller
     private readonly ARCApprovalAuthorityMigration _arcApprovalAuthorityMigration;
     private readonly PRAttachmentMigration _prAttachmentMigration;
     private readonly PRBoqItemsMigration _prBoqItemsMigration;
+    private readonly IConfiguration _configuration;
 
 
     public MigrationController(
@@ -71,29 +73,12 @@ public class MigrationController : Controller
         POConditionMasterMigration poConditionMigration,
         WorkflowMasterMigration workflowMigration,
         WorkflowMasterHistoryMigration workflowHistoryMigration,
+        WorkflowHistoryMigration workflowHistoryTableMigration,
         WorkflowAmountMigration workflowAmountMigration,
         WorkflowAmountHistoryMigration workflowAmountHistoryMigration,
         WorkflowApprovalUserMigration workflowApprovalUserMigration,
         WorkflowApprovalUserHistoryMigration workflowApprovalUserHistoryMigration,
-        IHubContext<MigrationProgressHub> hubContext,
-        ARCMainMigration arcMainMigration,
-        TaxCodeMasterMigration taxCodeMasterMigration,
-        CompanyMasterMigration companyMasterMigration,
-        PurchaseOrganizationMasterMigration purchaseOrganizationMigration,
-        ValuationTypeMasterMigration valuationTypeMigration,
-        TypeOfCategoryMasterMigration typeOfCategoryMigration,
-        SupplierGroupMasterMigration supplierGroupMigration,
-        SupplierMasterMigration supplierMigration,
-        SupplierPaymentIncotermMigration supplierPaymentIncotermMigration,
-        SupplierInactiveMigration supplierInactiveMigration,
-        SupplierOtherContactMigration supplierOtherContactMigration,
-        ARCSubMigration arcSubMigration,
-        ARCPlantMigration arcPlantMigration,
-        ARCAttachmentMigration arcAttachmentMigration,
-        ARCApprovalAuthorityMigration arcApprovalAuthorityMigration,
-        PRAttachmentMigration prAttachmentMigration,
-        PRBoqItemsMigration prBoqItemsMigration
-    )
+        IHubContext<MigrationProgressHub> hubContext)
     {
         _uomMigration = uomMigration;
         _plantMigration = plantMigration;
@@ -112,64 +97,12 @@ public class MigrationController : Controller
         _poConditionMigration = poConditionMigration;
         _workflowMigration = workflowMigration;
         _workflowHistoryMigration = workflowHistoryMigration;
+        _workflowHistoryTableMigration = workflowHistoryTableMigration;
         _workflowAmountMigration = workflowAmountMigration;
         _workflowAmountHistoryMigration = workflowAmountHistoryMigration;
         _workflowApprovalUserMigration = workflowApprovalUserMigration;
         _workflowApprovalUserHistoryMigration = workflowApprovalUserHistoryMigration;
         _hubContext = hubContext;
-        _arcMainMigration = arcMainMigration;
-        _taxCodeMasterMigration = taxCodeMasterMigration;
-        _companyMasterMigration = companyMasterMigration;
-        _purchaseOrganizationMigration = purchaseOrganizationMigration;
-        _valuationTypeMigration = valuationTypeMigration;
-        _typeOfCategoryMigration = typeOfCategoryMigration;
-        _supplierGroupMigration = supplierGroupMigration;
-        _supplierMigration = supplierMigration;
-        _supplierPaymentIncotermMigration = supplierPaymentIncotermMigration;
-        _supplierInactiveMigration = supplierInactiveMigration;
-        _supplierOtherContactMigration = supplierOtherContactMigration;
-		_arcSubMigration = arcSubMigration;
-		_arcPlantMigration = arcPlantMigration;
-		_arcAttachmentMigration = arcAttachmentMigration;
-		_arcApprovalAuthorityMigration = arcApprovalAuthorityMigration;
-        _prAttachmentMigration = prAttachmentMigration;
-        _prBoqItemsMigration = prBoqItemsMigration;
-
-       
-    }
-     [HttpPost("MigratePRAttachment")]
-         public async Task<IActionResult> MigratePRAttachment()
-        {
-            int migrated = await _prAttachmentMigration.MigrateAsync();
-            return Ok(new { migrated });
-        }
-
-    [HttpPost("MigratePRBoqItems")]
-    public async Task<IActionResult> MigratePRBoqItems()
-    {
-        int migrated = await _prBoqItemsMigration.MigrateAsync();
-        return Ok(new { migrated });
-    }
-
-    [HttpPost("MigrateARCPlant")]
-    public async Task<IActionResult> MigrateARCPlant()
-    {
-        int migrated = await _arcPlantMigration.MigrateAsync();
-        return Ok(new { migrated });
-    }
-
-    [HttpPost("MigrateARCAttachment")]
-    public async Task<IActionResult> MigrateARCAttachment()
-    {
-        int migrated = await _arcAttachmentMigration.MigrateAsync();
-        return Ok(new { migrated });
-    }
-
-    [HttpPost("MigrateARCApprovalAuthority")]
-    public async Task<IActionResult> MigrateARCApprovalAuthority()
-    {
-        int migrated = await _arcApprovalAuthorityMigration.MigrateAsync();
-        return Ok(new { migrated });
     }
 
     public IActionResult Index()
@@ -216,6 +149,7 @@ public class MigrationController : Controller
             new { name = "pocondition", description = "TBL_POConditionTypeMaster to po_condition_master" },
             new { name = "workflow", description = "TBL_WorkFlowMain to workflow_master" },
             new { name = "workflowhistory", description = "TBL_WorkFlowMain_History to workflow_master_history" },
+            new { name = "workflowhistorytable", description = "TBL_WORKFLOW_HISTORY to workflow_history" },
             new { name = "workflowamount", description = "TBL_WorkFlowSub to workflow_amount" },
             new { name = "workflowamounthistory", description = "TBL_WorkFlowSub_History to workflow_amount_history" },
             new { name = "workflowapprovaluser", description = "TBL_WorkflowApprovalUser to workflow_approval_user" },
@@ -350,6 +284,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "workflowhistory")
         {
             var mappings = _workflowHistoryMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "workflowhistorytable")
+        {
+            var mappings = _workflowHistoryTableMigration.GetMappings();
             return Json(mappings);
         }
         else if (table.ToLower() == "workflowamount")
@@ -578,6 +517,10 @@ public class MigrationController : Controller
             {
                 recordCount = await _workflowHistoryMigration.MigrateAsync();
             }
+            else if (request.Table.ToLower() == "workflowhistorytable")
+            {
+                recordCount = await _workflowHistoryTableMigration.MigrateAsync();
+            }
             else if (request.Table.ToLower() == "workflowamount")
             {
                 recordCount = await _workflowAmountMigration.MigrateAsync();
@@ -693,6 +636,7 @@ public class MigrationController : Controller
                 _poConditionMigration,
                 _workflowMigration,
                 _workflowHistoryMigration,
+                _workflowHistoryTableMigration,
                 _workflowAmountMigration,
                 _workflowAmountHistoryMigration,
                 _workflowApprovalUserMigration,
@@ -745,6 +689,7 @@ public class MigrationController : Controller
             results["POCondition"] = new { count = await _poConditionMigration.MigrateAsync(), success = true };
             results["Workflow"] = new { count = await _workflowMigration.MigrateAsync(), success = true };
             results["WorkflowHistory"] = new { count = await _workflowHistoryMigration.MigrateAsync(), success = true };
+            results["WorkflowHistoryTable"] = new { count = await _workflowHistoryTableMigration.MigrateAsync(), success = true };
             results["WorkflowAmount"] = new { count = await _workflowAmountMigration.MigrateAsync(), success = true };
             results["WorkflowAmountHistory"] = new { count = await _workflowAmountHistoryMigration.MigrateAsync(), success = true };
             results["WorkflowApprovalUser"] = new { count = await _workflowApprovalUserMigration.MigrateAsync(), success = true };
@@ -1013,6 +958,10 @@ public class MigrationController : Controller
             {
                 validation = await _workflowAmountMigration.ValidateSourceDataAsync();
             }
+            else if (table.ToLower() == "workflowhistorytable")
+            {
+                validation = await _workflowHistoryTableMigration.ValidateSourceDataAsync();
+            }
             else
             {
                 return Json(new { success = false, error = "Validation not available for this table" });
@@ -1108,6 +1057,81 @@ public class MigrationController : Controller
     {
         int migrated = await _supplierOtherContactMigration.MigrateAsync();
         return Ok(new { migrated });
+    }
+
+    [HttpPost("migrate-workflow-history-no-transaction")]
+    public async Task<IActionResult> MigrateWorkflowHistoryNoTransaction()
+    {
+        try
+        {
+            var recordCount = await _workflowHistoryTableMigration.MigrateWithoutTransactionAsync();
+            return Json(new { success = true, message = $"WorkflowHistory migration completed without transaction. {recordCount} records migrated." });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
+        }
+    }
+
+    [HttpPost("truncate-table/{table}")]
+    public async Task<IActionResult> TruncateTable(string table)
+    {
+        try
+        {
+            // Map table names to PostgreSQL table names
+            var tableMapping = new Dictionary<string, string>
+            {
+                { "uom", "uom_master" },
+                { "plant", "plant_master" },
+                { "currency", "currency_master" },
+                { "country", "country_master" },
+                { "material_group", "material_group_master" },
+                { "purchase_group", "purchase_group_master" },
+                { "payment_term", "payment_term_master" },
+                { "material", "material_master" },
+                { "event", "event_master" },
+                { "tax", "tax_master" },
+                { "users", "users" },
+                { "erp_pr_lines", "erp_pr_lines" },
+                { "incoterm", "incoterm_master" },
+                { "po_doc_type", "po_doc_type_master" },
+                { "po_condition", "po_condition_master" },
+                { "workflow", "workflow_master" },
+                { "workflow_history", "workflow_master_history" },
+                { "workflow_history_table", "workflow_history" },
+                { "workflow_amount", "workflow_amount" },
+                { "workflow_amount_history", "workflow_amount_history" },
+                { "workflow_approval_user", "workflow_approval_user" },
+                { "workflow_approval_user_history", "workflow_approval_user_history" }
+            };
+
+            if (!tableMapping.TryGetValue(table, out var pgTableName))
+            {
+                return Json(new { success = false, error = $"Unknown table: {table}" });
+            }
+
+            // Get PostgreSQL connection string from configuration
+            var connectionString = _configuration.GetConnectionString("PostgreSql");
+            
+            using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+            {
+                await conn.OpenAsync();
+                
+                // Use TRUNCATE CASCADE to handle foreign key constraints
+                var truncateCommand = $"TRUNCATE TABLE {pgTableName} CASCADE";
+                
+                using (var cmd = new Npgsql.NpgsqlCommand(truncateCommand, conn))
+                {
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+
+            return Json(new { success = true, message = $"Table '{pgTableName}' truncated successfully (CASCADE)" });
+        }
+        catch (Exception ex)
+        {
+            return Json(new { success = false, error = ex.Message });
+        }
     }
 }
 public class MigrationRequest
