@@ -51,6 +51,8 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<PRAttachmentMigration>();
         services.AddScoped<PRBoqItemsMigration>();
+        services.AddScoped<EventItemsMigration>();
+        services.AddScoped<EventBoqItemsMigration>();
 
         return services;
     }
