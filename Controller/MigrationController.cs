@@ -52,6 +52,8 @@ public class MigrationController : Controller
     private readonly ARCApprovalAuthorityMigration _arcApprovalAuthorityMigration;
     private readonly PRAttachmentMigration _prAttachmentMigration;
     private readonly PRBoqItemsMigration _prBoqItemsMigration;
+    private readonly EventItemsMigration _eventItemsMigration;
+    private readonly EventBoqItemsMigration _eventBoqItemsMigration;
     private readonly IConfiguration _configuration;
     private readonly EventSettingMigrationService _eventSettingMigrationService;
     private readonly ILogger<MigrationController> _logger;
@@ -87,6 +89,8 @@ public class MigrationController : Controller
         ARCApprovalAuthorityMigration arcApprovalAuthorityMigration,
         PRAttachmentMigration prAttachmentMigration,
         PRBoqItemsMigration prBoqItemsMigration,
+        EventItemsMigration eventItemsMigration,
+        EventBoqItemsMigration eventBoqItemsMigration,
         TaxCodeMasterMigration taxCodeMasterMigration,
         CompanyMasterMigration companyMasterMigration,
         PurchaseOrganizationMasterMigration purchaseOrganizationMigration,
@@ -131,6 +135,8 @@ public class MigrationController : Controller
         _arcApprovalAuthorityMigration = arcApprovalAuthorityMigration;
         _prAttachmentMigration = prAttachmentMigration;
         _prBoqItemsMigration = prBoqItemsMigration;
+        _eventItemsMigration = eventItemsMigration;
+        _eventBoqItemsMigration = eventBoqItemsMigration;
         _taxCodeMasterMigration = taxCodeMasterMigration;
         _companyMasterMigration = companyMasterMigration;
         _purchaseOrganizationMigration = purchaseOrganizationMigration;
@@ -177,6 +183,8 @@ public class MigrationController : Controller
             new {name = "arcattachment", description = "TBL_ARCATTACHMENT to arc_attachments" },
             new {name = "prattachment", description = "TBL_PRATTACHMENT to pr_attachments" },
             new {name = "prboqitems", description = "tbl_PRBOQItems to pr_boq_items" },
+            new {name = "eventitems", description = "TBL_PB_BUYER to event_items" },
+            new {name = "eventboqitems", description = "TBL_PB_BUYER_SUB to event_boq_items" },
             new {name = "arcapprovalauthority", description = "TBL_ARCApprovalAuthority to arc_workflow" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
@@ -382,6 +390,16 @@ public class MigrationController : Controller
         else if (table.ToLower() == "prboqitems")
         {
             var mappings = _prBoqItemsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventitems")
+        {
+            var mappings = _eventItemsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventboqitems")
+        {
+            var mappings = _eventBoqItemsMigration.GetMappings();
             return Json(mappings);
         }
         else if (table.ToLower() == "arcapprovalauthority")
@@ -603,6 +621,14 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "prboqitems")
             {
                 recordCount = await _prBoqItemsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventitems")
+            {
+                recordCount = await _eventItemsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventboqitems")
+            {
+                recordCount = await _eventBoqItemsMigration.MigrateAsync();
             }
             else if (request.Table.ToLower() == "arcapprovalauthority")
             {
