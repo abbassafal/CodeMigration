@@ -38,30 +38,56 @@ public class TechnicalParameterTemplateMigration : MigrationService
             item_id,
             template_name,
             technical_parameter_name,
-            technical_parameter_mandatory
+            technical_parameter_mandatory,
+            created_by,
+            created_date,
+            modified_by,
+            modified_date,
+            is_deleted,
+            deleted_by,
+            deleted_date
         ) VALUES (
             @technical_parameter_template_id,
             @item_id,
             @template_name,
             @technical_parameter_name,
-            @technical_parameter_mandatory
+            @technical_parameter_mandatory,
+            @created_by,
+            @created_date,
+            @modified_by,
+            @modified_date,
+            @is_deleted,
+            @deleted_by,
+            @deleted_date
         )
         ON CONFLICT (technical_parameter_template_id) 
         DO UPDATE SET
             item_id = EXCLUDED.item_id,
             template_name = EXCLUDED.template_name,
             technical_parameter_name = EXCLUDED.technical_parameter_name,
-            technical_parameter_mandatory = EXCLUDED.technical_parameter_mandatory";
+            technical_parameter_mandatory = EXCLUDED.technical_parameter_mandatory,
+            modified_by = EXCLUDED.modified_by,
+            modified_date = EXCLUDED.modified_date,
+            is_deleted = EXCLUDED.is_deleted,
+            deleted_by = EXCLUDED.deleted_by,
+            deleted_date = EXCLUDED.deleted_date";
 
     protected override List<string> GetLogics()
     {
         return new List<string>
         {
-            "Direct", // technical_parameter_template_id
-            "Direct", // item_id
-            "Direct", // template_name
-            "Direct", // technical_parameter_name
-            "Boolean" // technical_parameter_mandatory
+            "Direct",  // technical_parameter_template_id
+            "Direct",  // item_id
+            "Direct",  // template_name
+            "Direct",  // technical_parameter_name
+            "Boolean", // technical_parameter_mandatory
+            "Fixed",   // created_by
+            "Fixed",   // created_date
+            "Fixed",   // modified_by
+            "Fixed",   // modified_date
+            "Fixed",   // is_deleted
+            "Fixed",   // deleted_by
+            "Fixed"    // deleted_date
         };
     }
 
@@ -73,7 +99,14 @@ public class TechnicalParameterTemplateMigration : MigrationService
             new { source = "Item_Id", logic = "Item_Id -> item_id (Foreign key reference)", target = "item_id" },
             new { source = "Title", logic = "Title -> template_name (Template name from TBL_TECHPARAMAIN)", target = "template_name" },
             new { source = "ParaName", logic = "ParaName -> technical_parameter_name (Parameter name from TBL_TECHPARASUB)", target = "technical_parameter_name" },
-            new { source = "IsMandatory", logic = "IsMandatory -> technical_parameter_mandatory (Boolean: 1=true, other=false)", target = "technical_parameter_mandatory" }
+            new { source = "IsMandatory", logic = "IsMandatory -> technical_parameter_mandatory (Boolean: 1=true, other=false)", target = "technical_parameter_mandatory" },
+            new { source = "-", logic = "created_by -> NULL (Fixed Default)", target = "created_by" },
+            new { source = "-", logic = "created_date -> NULL (Fixed Default)", target = "created_date" },
+            new { source = "-", logic = "modified_by -> NULL (Fixed Default)", target = "modified_by" },
+            new { source = "-", logic = "modified_date -> NULL (Fixed Default)", target = "modified_date" },
+            new { source = "-", logic = "is_deleted -> false (Fixed Default)", target = "is_deleted" },
+            new { source = "-", logic = "deleted_by -> NULL (Fixed Default)", target = "deleted_by" },
+            new { source = "-", logic = "deleted_date -> NULL (Fixed Default)", target = "deleted_date" }
         };
     }
 
@@ -141,7 +174,14 @@ public class TechnicalParameterTemplateMigration : MigrationService
                     ["item_id"] = itemId,
                     ["template_name"] = title ?? DBNull.Value,
                     ["technical_parameter_name"] = paraName ?? DBNull.Value,
-                    ["technical_parameter_mandatory"] = isMandatoryValue
+                    ["technical_parameter_mandatory"] = isMandatoryValue,
+                    ["created_by"] = DBNull.Value,
+                    ["created_date"] = DBNull.Value,
+                    ["modified_by"] = DBNull.Value,
+                    ["modified_date"] = DBNull.Value,
+                    ["is_deleted"] = false,
+                    ["deleted_by"] = DBNull.Value,
+                    ["deleted_date"] = DBNull.Value
                 };
 
                 batch.Add(record);
