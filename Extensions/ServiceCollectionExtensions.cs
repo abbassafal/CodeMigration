@@ -70,6 +70,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SupplierTermsMigration>();
         services.AddScoped<SupplierTermDeviationsMigration>();
         services.AddScoped<SupplierTechnicalParameterMigration>();
+        services.AddScoped<NfaHeaderMigration>();
 
         return services;
     }

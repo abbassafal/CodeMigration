@@ -71,6 +71,7 @@ public class MigrationController : Controller
     private readonly SupplierTermsMigration _supplierTermsMigration;
     private readonly SupplierTermDeviationsMigration _supplierTermDeviationsMigration;
     private readonly SupplierTechnicalParameterMigration _supplierTechnicalParameterMigration;
+    private readonly NfaHeaderMigration _nfaHeaderMigration;
     private readonly IConfiguration _configuration;
     private readonly EventSettingMigrationService _eventSettingMigrationService;
     private readonly ILogger<MigrationController> _logger;
@@ -125,6 +126,7 @@ public class MigrationController : Controller
         SupplierTermsMigration supplierTermsMigration,
         SupplierTermDeviationsMigration supplierTermDeviationsMigration,
         SupplierTechnicalParameterMigration supplierTechnicalParameterMigration,
+        NfaHeaderMigration nfaHeaderMigration,
         TaxCodeMasterMigration taxCodeMasterMigration,
         CompanyMasterMigration companyMasterMigration,
         PurchaseOrganizationMasterMigration purchaseOrganizationMigration,
@@ -188,6 +190,7 @@ public class MigrationController : Controller
         _supplierTermsMigration = supplierTermsMigration;
         _supplierTermDeviationsMigration = supplierTermDeviationsMigration;
         _supplierTechnicalParameterMigration = supplierTechnicalParameterMigration;
+        _nfaHeaderMigration = nfaHeaderMigration;
         _taxCodeMasterMigration = taxCodeMasterMigration;
         _companyMasterMigration = companyMasterMigration;
         _purchaseOrganizationMigration = purchaseOrganizationMigration;
@@ -253,6 +256,7 @@ public class MigrationController : Controller
             new {name = "supplierterms", description = "TBL_VENDORDEVIATIONMASTER to supplier_terms" },
             new {name = "suppliertermdeviations", description = "TBL_VENDORDEVIATIONTRN to supplier_term_deviations" },
             new {name = "suppliertechnicalparameter", description = "TBL_VendorTechItemTerm to supplier_technical_parameter" },
+            new {name = "nfaheader", description = "TBL_AWARDEVENTMAIN to nfa_header" },
             new {name = "arcapprovalauthority", description = "TBL_ARCApprovalAuthority to arc_workflow" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
@@ -555,6 +559,11 @@ public class MigrationController : Controller
             var mappings = _supplierTechnicalParameterMigration.GetMappings();
             return Json(mappings);
         }
+        else if (table.ToLower() == "nfaheader")
+        {
+            var mappings = _nfaHeaderMigration.GetMappings();
+            return Json(mappings);
+        }
         else if (table.ToLower() == "arcapprovalauthority")
         {
             var mappings = _arcApprovalAuthorityMigration.GetMappings();
@@ -850,6 +859,10 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "suppliertechnicalparameter")
             {
                 recordCount = await _supplierTechnicalParameterMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "nfaheader")
+            {
+                recordCount = await _nfaHeaderMigration.MigrateAsync(useTransaction: false);
             }
             else if (request.Table.ToLower() == "usercompanymaster")
             {

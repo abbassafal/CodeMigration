@@ -111,7 +111,7 @@ public class SupplierTechnicalParameterMigration : MigrationService
 
     public async Task<int> MigrateAsync()
     {
-        return await base.MigrateAsync(useTransaction: true);
+        return await base.MigrateAsync(useTransaction: false);
     }
 
     protected override async Task<int> ExecuteMigrationAsync(SqlConnection sqlConn, NpgsqlConnection pgConn, NpgsqlTransaction? transaction = null)
@@ -244,7 +244,7 @@ public class SupplierTechnicalParameterMigration : MigrationService
 
                 if (batch.Count >= BATCH_SIZE)
                 {
-                    int batchMigrated = await InsertBatchAsync(batch, pgConn, transaction);
+                    int batchMigrated = await InsertBatchWithTransactionAsync(batch, pgConn);
                     migratedRecords += batchMigrated;
                     batch.Clear();
                 }
@@ -253,7 +253,7 @@ public class SupplierTechnicalParameterMigration : MigrationService
             // Insert remaining records
             if (batch.Count > 0)
             {
-                int batchMigrated = await InsertBatchAsync(batch, pgConn, transaction);
+                int batchMigrated = await InsertBatchWithTransactionAsync(batch, pgConn);
                 migratedRecords += batchMigrated;
             }
 
@@ -347,10 +347,11 @@ public class SupplierTechnicalParameterMigration : MigrationService
         return map;
     }
 
-    private async Task<int> InsertBatchAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn, NpgsqlTransaction? transaction)
+    private async Task<int> InsertBatchWithTransactionAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn)
     {
         int insertedCount = 0;
 
+        using var transaction = await pgConn.BeginTransactionAsync();
         try
         {
             foreach (var record in batch)
@@ -365,11 +366,14 @@ public class SupplierTechnicalParameterMigration : MigrationService
                 await cmd.ExecuteNonQueryAsync();
                 insertedCount++;
             }
+
+            await transaction.CommitAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records");
-            throw;
+            await transaction.RollbackAsync();
+            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records. Batch rolled back.");
+            // Don't throw - continue with next batch
         }
 
         return insertedCount;
