@@ -61,6 +61,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TechnicalApprovalScoreMigration>();
         services.AddScoped<TechnicalApprovalScoreHistoryMigration>();
         services.AddScoped<TechnicalDocumentsMigration>();
+        services.AddScoped<TechnicalParameterTemplateMigration>();
+        services.AddScoped<TermMasterMigration>();
+        services.AddScoped<TermTemplateMasterMigration>();
 
         return services;
     }
