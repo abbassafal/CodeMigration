@@ -146,12 +146,20 @@ ON CONFLICT (user_technical_parameter_id) DO UPDATE SET
                 }
             }
 
+            // Convert Required integer to boolean: 1 = true, 2 = false
+            object technicalParameterMandatory = DBNull.Value;
+            if (required != DBNull.Value)
+            {
+                int requiredValue = Convert.ToInt32(required);
+                technicalParameterMandatory = requiredValue == 1;
+            }
+
             var record = new Dictionary<string, object>
             {
                 ["user_technical_parameter_id"] = techItemTermId,
                 ["event_item_id"] = pbId,
                 ["technical_parameter"] = terms,
-                ["technical_parameter_mandatory"] = required,
+                ["technical_parameter_mandatory"] = technicalParameterMandatory,
                 ["event_id"] = eventId,
                 ["created_by"] = DBNull.Value,
                 ["created_date"] = DBNull.Value,
