@@ -67,6 +67,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<UserPriceBidLotChargesMigration>();
         services.AddScoped<UserPriceBidNonPricingMigration>();
         services.AddScoped<UserCompanyMasterMigration>();
+        services.AddScoped<SupplierTermsMigration>();
 
         return services;
     }

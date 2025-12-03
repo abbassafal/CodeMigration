@@ -21,10 +21,10 @@ public class UserPriceBidNonPricingMigration : MigrationService
         ORDER BY PB_BuyerNonPricingId";
 
     protected override string InsertQuery => @"
-        INSERT INTO user_price_bid_lot_charges (
-            user_price_bid_lot_charges_id,
+        INSERT INTO user_price_bid_non_pricing (
+            user_price_bid_non_pricing_id,
+            none_pricing_title,
             event_id,
-            price_bid_charges_id,
             mandatory,
             created_by,
             created_date,
@@ -34,9 +34,9 @@ public class UserPriceBidNonPricingMigration : MigrationService
             deleted_by,
             deleted_date
         ) VALUES (
-            @user_price_bid_lot_charges_id,
+            @user_price_bid_non_pricing_id,
+            @none_pricing_title,
             @event_id,
-            @price_bid_charges_id,
             @mandatory,
             @created_by,
             @created_date,
@@ -46,9 +46,9 @@ public class UserPriceBidNonPricingMigration : MigrationService
             @deleted_by,
             @deleted_date
         )
-        ON CONFLICT (user_price_bid_lot_charges_id) DO UPDATE SET
+        ON CONFLICT (user_price_bid_non_pricing_id) DO UPDATE SET
+            none_pricing_title = EXCLUDED.none_pricing_title,
             event_id = EXCLUDED.event_id,
-            price_bid_charges_id = EXCLUDED.price_bid_charges_id,
             mandatory = EXCLUDED.mandatory,
             modified_by = EXCLUDED.modified_by,
             modified_date = EXCLUDED.modified_date,
@@ -65,9 +65,9 @@ public class UserPriceBidNonPricingMigration : MigrationService
     {
         return new List<string>
         {
-            "Direct",  // user_price_bid_lot_charges_id
+            "Direct",  // user_price_bid_non_pricing_id
+            "Direct",  // none_pricing_title
             "Direct",  // event_id
-            "Fixed",   // price_bid_charges_id (NULL)
             "Fixed",   // mandatory
             "Fixed",   // created_by
             "Fixed",   // created_date
@@ -83,10 +83,9 @@ public class UserPriceBidNonPricingMigration : MigrationService
     {
         return new List<object>
         {
-            new { source = "PB_BuyerNonPricingId", logic = "PB_BuyerNonPricingId -> user_price_bid_lot_charges_id (Primary key, autoincrement)", target = "user_price_bid_lot_charges_id" },
-            new { source = "PB_NonPricingTitle", logic = "PB_NonPricingTitle -> Not mapped to target table", target = "-" },
+            new { source = "PB_BuyerNonPricingId", logic = "PB_BuyerNonPricingId -> user_price_bid_non_pricing_id (Primary key, autoincrement)", target = "user_price_bid_non_pricing_id" },
+            new { source = "PB_NonPricingTitle", logic = "PB_NonPricingTitle -> none_pricing_title", target = "none_pricing_title" },
             new { source = "EVENT_ID", logic = "EVENT_ID -> event_id (Foreign key to event_master)", target = "event_id" },
-            new { source = "-", logic = "price_bid_charges_id -> First available from price_bid_charges_master (Default)", target = "price_bid_charges_id" },
             new { source = "-", logic = "mandatory -> false (Fixed Default)", target = "mandatory" },
             new { source = "-", logic = "created_by -> NULL (Fixed Default)", target = "created_by" },
             new { source = "-", logic = "created_date -> NULL (Fixed Default)", target = "created_date" },
@@ -116,15 +115,6 @@ public class UserPriceBidNonPricingMigration : MigrationService
             // Load valid event IDs
             var validEventIds = await LoadValidEventIdsAsync(pgConn);
             _logger.LogInformation($"Loaded {validEventIds.Count} valid event IDs");
-
-            // Load default price_bid_charges_id (first available)
-            int? defaultPriceBidChargesId = await LoadDefaultPriceBidChargesIdAsync(pgConn);
-            if (defaultPriceBidChargesId == null)
-            {
-                _logger.LogError("No price_bid_charges_id found in price_bid_charges_master table. Cannot proceed with migration.");
-                return 0;
-            }
-            _logger.LogInformation($"Using default price_bid_charges_id: {defaultPriceBidChargesId}");
 
             using var sqlCommand = new SqlCommand(SelectQuery, sqlConn);
             sqlCommand.CommandTimeout = 300;
@@ -173,9 +163,9 @@ public class UserPriceBidNonPricingMigration : MigrationService
 
                 var record = new Dictionary<string, object>
                 {
-                    ["user_price_bid_lot_charges_id"] = pbBuyerNonPricingIdValue,
+                    ["user_price_bid_non_pricing_id"] = pbBuyerNonPricingIdValue,
+                    ["none_pricing_title"] = pbNonPricingTitle ?? DBNull.Value,
                     ["event_id"] = eventId ?? DBNull.Value,
-                    ["price_bid_charges_id"] = defaultPriceBidChargesId.Value,
                     ["mandatory"] = false,
                     ["created_by"] = DBNull.Value,
                     ["created_date"] = DBNull.Value,
@@ -238,27 +228,6 @@ public class UserPriceBidNonPricingMigration : MigrationService
         }
 
         return validIds;
-    }
-
-    private async Task<int?> LoadDefaultPriceBidChargesIdAsync(NpgsqlConnection pgConn)
-    {
-        try
-        {
-            var query = "SELECT price_bid_charges_id FROM price_bid_charges_master ORDER BY price_bid_charges_id LIMIT 1";
-            using var command = new NpgsqlCommand(query, pgConn);
-            var result = await command.ExecuteScalarAsync();
-
-            if (result != null && result != DBNull.Value)
-            {
-                return Convert.ToInt32(result);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading default price_bid_charges_id");
-        }
-
-        return null;
     }
 
     private async Task<int> InsertBatchAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn, NpgsqlTransaction? transaction)
