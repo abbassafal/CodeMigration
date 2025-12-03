@@ -21,16 +21,15 @@ SELECT
     ItemName,
     UOM,
     Rate,
-    Quantity,
-    Remarks
+    Quantity
 FROM TBL_PB_BUYER_SUB
 ";
 
     protected override string InsertQuery => @"
 INSERT INTO event_boq_items (
-    event_boq_items_id, event_item_id, event_id, pr_boq_id, material_code, material_name, material_description, uom, boq_qty, remarks
+    event_boq_items_id, event_item_id, event_id, pr_boq_id, material_code, material_name, material_description, uom, boq_qty
 ) VALUES (
-    @event_boq_items_id, @event_item_id, @event_id, @pr_boq_id, @material_code, @material_name, @material_description, @uom, @boq_qty, @remarks
+    @event_boq_items_id, @event_item_id, @event_id, @pr_boq_id, @material_code, @material_name, @material_description, @uom, @boq_qty
 )
 ON CONFLICT (event_boq_items_id) DO UPDATE SET
     event_item_id = EXCLUDED.event_item_id,
@@ -40,8 +39,7 @@ ON CONFLICT (event_boq_items_id) DO UPDATE SET
     material_name = EXCLUDED.material_name,
     material_description = EXCLUDED.material_description,
     uom = EXCLUDED.uom,
-    boq_qty = EXCLUDED.boq_qty,
-    remarks = EXCLUDED.remarks";
+    boq_qty = EXCLUDED.boq_qty";
 
     public EventBoqItemsMigration(IConfiguration configuration, ILogger<EventBoqItemsMigration> logger) : base(configuration)
     {
@@ -58,8 +56,7 @@ ON CONFLICT (event_boq_items_id) DO UPDATE SET
         "Direct", // material_name
         "Direct", // material_description
         "Direct", // uom
-        "Direct", // boq_qty
-        "Direct"  // remarks
+        "Direct"  // boq_qty
     };
 
     public override List<object> GetMappings()
@@ -74,8 +71,7 @@ ON CONFLICT (event_boq_items_id) DO UPDATE SET
             new { source = "ItemName", logic = "ItemName -> material_name (Direct)", target = "material_name" },
             new { source = "ItemName", logic = "ItemName -> material_description (Direct)", target = "material_description" },
             new { source = "UOM", logic = "UOM -> uom (Direct)", target = "uom" },
-            new { source = "Quantity", logic = "Quantity -> boq_qty (Direct)", target = "boq_qty" },
-            new { source = "Remarks", logic = "Remarks -> remarks (Direct)", target = "remarks" }
+            new { source = "Quantity", logic = "Quantity -> boq_qty (Direct)", target = "boq_qty" }
         };
     }
 
@@ -107,7 +103,6 @@ ON CONFLICT (event_boq_items_id) DO UPDATE SET
             var uom = reader["UOM"] ?? DBNull.Value;
             var rate = reader["Rate"] ?? DBNull.Value;
             var quantity = reader["Quantity"] ?? DBNull.Value;
-            var remarks = reader["Remarks"] ?? DBNull.Value;
 
             // Validate required keys
             if (pbSubId == DBNull.Value)
@@ -127,8 +122,7 @@ ON CONFLICT (event_boq_items_id) DO UPDATE SET
                 ["material_name"] = itemName,
                 ["material_description"] = itemName,
                 ["uom"] = uom,
-                ["boq_qty"] = quantity,
-                ["remarks"] = remarks
+                ["boq_qty"] = quantity
             };
 
             batch.Add(record);
@@ -169,7 +163,7 @@ ON CONFLICT (event_boq_items_id) DO UPDATE SET
         }
 
         var columns = new List<string> {
-            "event_boq_items_id", "event_item_id", "event_id", "pr_boq_id", "material_code", "material_name", "material_description", "uom", "boq_qty", "remarks"
+            "event_boq_items_id", "event_item_id", "event_id", "pr_boq_id", "material_code", "material_name", "material_description", "uom", "boq_qty"
         };
 
         var valueRows = new List<string>();
