@@ -58,6 +58,7 @@ public class MigrationController : Controller
     private readonly EventCollaborationMigration _eventCollaborationMigration;
     private readonly UserTechnicalParameterMigration _userTechnicalParameterMigration;
     private readonly UserTermMigration _userTermMigration;
+    private readonly TechnicalApprovalWorkflowMigration _technicalApprovalWorkflowMigration;
     private readonly IConfiguration _configuration;
     private readonly EventSettingMigrationService _eventSettingMigrationService;
     private readonly ILogger<MigrationController> _logger;
@@ -99,6 +100,7 @@ public class MigrationController : Controller
         EventCollaborationMigration eventCollaborationMigration,
         UserTechnicalParameterMigration userTechnicalParameterMigration,
         UserTermMigration userTermMigration,
+        TechnicalApprovalWorkflowMigration technicalApprovalWorkflowMigration,
         TaxCodeMasterMigration taxCodeMasterMigration,
         CompanyMasterMigration companyMasterMigration,
         PurchaseOrganizationMasterMigration purchaseOrganizationMigration,
@@ -149,6 +151,7 @@ public class MigrationController : Controller
         _eventCollaborationMigration = eventCollaborationMigration;
         _userTechnicalParameterMigration = userTechnicalParameterMigration;
         _userTermMigration = userTermMigration;
+        _technicalApprovalWorkflowMigration = technicalApprovalWorkflowMigration;
         _taxCodeMasterMigration = taxCodeMasterMigration;
         _companyMasterMigration = companyMasterMigration;
         _purchaseOrganizationMigration = purchaseOrganizationMigration;
@@ -201,6 +204,7 @@ public class MigrationController : Controller
             new {name = "eventcollaboration", description = "TBL_EVENTSELECTEDUSER (Non-Vendor) to event_collaboration" },
             new {name = "usertechnicalparameter", description = "TBL_TechItemTerms to user_technical_parameter" },
             new {name = "userterm", description = "TBL_CLAUSEEVENTWISE to user_term" },
+            new {name = "technicalapprovalworkflow", description = "TBL_TechnicalApproval_History to technical_approval_workflow" },
             new {name = "arcapprovalauthority", description = "TBL_ARCApprovalAuthority to arc_workflow" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
@@ -436,6 +440,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "userterm")
         {
             var mappings = _userTermMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "technicalapprovalworkflow")
+        {
+            var mappings = _technicalApprovalWorkflowMigration.GetMappings();
             return Json(mappings);
         }
         else if (table.ToLower() == "arcapprovalauthority")
@@ -681,6 +690,10 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "userterm")
             {
                 recordCount = await _userTermMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "technicalapprovalworkflow")
+            {
+                recordCount = await _technicalApprovalWorkflowMigration.MigrateAsync();
             }
             else if (request.Table.ToLower() == "arcapprovalauthority")
             {

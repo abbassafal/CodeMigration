@@ -57,6 +57,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EventCollaborationMigration>();
         services.AddScoped<UserTechnicalParameterMigration>();
         services.AddScoped<UserTermMigration>();
+        services.AddScoped<TechnicalApprovalWorkflowMigration>();
 
         return services;
     }
