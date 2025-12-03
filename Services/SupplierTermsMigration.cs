@@ -14,16 +14,16 @@ public class SupplierTermsMigration : MigrationService
 
     protected override string SelectQuery => @"
         SELECT
-            SupplierDEVIATIONMSTID,
+            VENDORDEVIATIONMSTID,
             EVENTID,
-            SupplierID,
+            VENDORID,
             CLAUSEEVENTWISEID,
             ISACCEPT,
             ISDEVIATE,
             ENT_DATE,
             ISUPDATED
         FROM TBL_VENDORDEVIATIONMASTER
-        ORDER BY SupplierDEVIATIONMSTID";
+        ORDER BY VENDORDEVIATIONMSTID";
 
     protected override string InsertQuery => @"
         INSERT INTO supplier_terms (
@@ -96,9 +96,9 @@ public class SupplierTermsMigration : MigrationService
     {
         return new List<object>
         {
-            new { source = "SupplierDEVIATIONMSTID", logic = "SupplierDEVIATIONMSTID -> supplier_term_id (Primary key, autoincrement - SupplierTermId)", target = "supplier_term_id" },
+            new { source = "VENDORDEVIATIONMSTID", logic = "VENDORDEVIATIONMSTID -> supplier_term_id (Primary key, autoincrement - SupplierTermId)", target = "supplier_term_id" },
             new { source = "EVENTID", logic = "EVENTID -> event_id (Foreign key to event_master - EventId)", target = "event_id" },
-            new { source = "SupplierID", logic = "SupplierID -> supplier_id (Foreign key to supplier_master - SupplierId)", target = "supplier_id" },
+            new { source = "VENDORID", logic = "VENDORID -> supplier_id (Foreign key to supplier_master - SupplierId)", target = "supplier_id" },
             new { source = "CLAUSEEVENTWISEID", logic = "CLAUSEEVENTWISEID -> user_term_id (Foreign key to user_term - UserTermId)", target = "user_term_id" },
             new { source = "ISACCEPT", logic = "ISACCEPT -> term_accept (Boolean - TermAccept)", target = "term_accept" },
             new { source = "ISDEVIATE", logic = "ISDEVIATE -> term_deviate (Boolean - TermDeviate)", target = "term_deviate" },
@@ -153,27 +153,27 @@ public class SupplierTermsMigration : MigrationService
             {
                 totalRecords++;
 
-                var supplierDeviationMstId = reader["SupplierDEVIATIONMSTID"];
+                var vendorDeviationMstId = reader["VENDORDEVIATIONMSTID"];
                 var eventId = reader["EVENTID"];
-                var supplierId = reader["SupplierID"];
+                var vendorId = reader["VENDORID"];
                 var clauseEventWiseId = reader["CLAUSEEVENTWISEID"];
                 var isAccept = reader["ISACCEPT"];
                 var isDeviate = reader["ISDEVIATE"];
                 var entDate = reader["ENT_DATE"];
                 var isUpdated = reader["ISUPDATED"];
 
-                // Skip if SupplierDEVIATIONMSTID is NULL
-                if (supplierDeviationMstId == DBNull.Value)
+                // Skip if VENDORDEVIATIONMSTID is NULL
+                if (vendorDeviationMstId == DBNull.Value)
                 {
                     skippedRecords++;
-                    _logger.LogWarning("Skipping record - SupplierDEVIATIONMSTID is NULL");
+                    _logger.LogWarning("Skipping record - VENDORDEVIATIONMSTID is NULL");
                     continue;
                 }
 
-                int supplierDeviationMstIdValue = Convert.ToInt32(supplierDeviationMstId);
+                int vendorDeviationMstIdValue = Convert.ToInt32(vendorDeviationMstId);
 
                 // Skip duplicates
-                if (processedIds.Contains(supplierDeviationMstIdValue))
+                if (processedIds.Contains(vendorDeviationMstIdValue))
                 {
                     skippedRecords++;
                     continue;
@@ -186,33 +186,38 @@ public class SupplierTermsMigration : MigrationService
                     if (!validEventIds.Contains(eventIdValue))
                     {
                         skippedRecords++;
-                        _logger.LogWarning($"Skipping SupplierDEVIATIONMSTID {supplierDeviationMstIdValue} - Invalid event_id: {eventIdValue}");
+                        _logger.LogWarning($"Skipping VENDORDEVIATIONMSTID {vendorDeviationMstIdValue} - Invalid event_id: {eventIdValue}");
                         continue;
                     }
                 }
 
                 // Validate supplier_id
-                if (supplierId != DBNull.Value)
+                if (vendorId != DBNull.Value)
                 {
-                    int supplierIdValue = Convert.ToInt32(supplierId);
-                    if (!validSupplierIds.Contains(supplierIdValue))
+                    int vendorIdValue = Convert.ToInt32(vendorId);
+                    if (!validSupplierIds.Contains(vendorIdValue))
                     {
                         skippedRecords++;
-                        _logger.LogWarning($"Skipping SupplierDEVIATIONMSTID {supplierDeviationMstIdValue} - Invalid supplier_id: {supplierIdValue}");
+                        _logger.LogWarning($"Skipping VENDORDEVIATIONMSTID {vendorDeviationMstIdValue} - Invalid supplier_id: {vendorIdValue}");
                         continue;
                     }
                 }
 
-                // Validate user_term_id
-                if (clauseEventWiseId != DBNull.Value)
+                // Skip if user_term_id is NULL (NOT NULL constraint)
+                if (clauseEventWiseId == DBNull.Value)
                 {
-                    int clauseEventWiseIdValue = Convert.ToInt32(clauseEventWiseId);
-                    if (!validUserTermIds.Contains(clauseEventWiseIdValue))
-                    {
-                        skippedRecords++;
-                        _logger.LogWarning($"Skipping SupplierDEVIATIONMSTID {supplierDeviationMstIdValue} - Invalid user_term_id: {clauseEventWiseIdValue}");
-                        continue;
-                    }
+                    skippedRecords++;
+                    _logger.LogWarning($"Skipping VENDORDEVIATIONMSTID {vendorDeviationMstIdValue} - user_term_id is NULL");
+                    continue;
+                }
+
+                // Validate user_term_id
+                int clauseEventWiseIdValue = Convert.ToInt32(clauseEventWiseId);
+                if (!validUserTermIds.Contains(clauseEventWiseIdValue))
+                {
+                    skippedRecords++;
+                    _logger.LogWarning($"Skipping VENDORDEVIATIONMSTID {vendorDeviationMstIdValue} - Invalid user_term_id: {clauseEventWiseIdValue}");
+                    continue;
                 }
 
                 // Convert ISACCEPT and ISDEVIATE to boolean
@@ -232,9 +237,9 @@ public class SupplierTermsMigration : MigrationService
 
                 var record = new Dictionary<string, object>
                 {
-                    ["supplier_term_id"] = supplierDeviationMstIdValue,
+                    ["supplier_term_id"] = vendorDeviationMstIdValue,
                     ["event_id"] = eventId ?? DBNull.Value,
-                    ["supplier_id"] = supplierId ?? DBNull.Value,
+                    ["supplier_id"] = vendorId ?? DBNull.Value,
                     ["user_term_id"] = clauseEventWiseId ?? DBNull.Value,
                     ["term_accept"] = termAccept,
                     ["term_deviate"] = termDeviate,
@@ -248,7 +253,7 @@ public class SupplierTermsMigration : MigrationService
                 };
 
                 batch.Add(record);
-                processedIds.Add(supplierDeviationMstIdValue);
+                processedIds.Add(vendorDeviationMstIdValue);
 
                 if (batch.Count >= BATCH_SIZE)
                 {

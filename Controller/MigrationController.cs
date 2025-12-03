@@ -69,6 +69,8 @@ public class MigrationController : Controller
     private readonly UserPriceBidNonPricingMigration _userPriceBidNonPricingMigration;
     private readonly UserCompanyMasterMigration _userCompanyMasterMigration;
     private readonly SupplierTermsMigration _supplierTermsMigration;
+    private readonly SupplierTermDeviationsMigration _supplierTermDeviationsMigration;
+    private readonly SupplierTechnicalParameterMigration _supplierTechnicalParameterMigration;
     private readonly IConfiguration _configuration;
     private readonly EventSettingMigrationService _eventSettingMigrationService;
     private readonly ILogger<MigrationController> _logger;
@@ -121,6 +123,8 @@ public class MigrationController : Controller
         UserPriceBidNonPricingMigration userPriceBidNonPricingMigration,
         UserCompanyMasterMigration userCompanyMasterMigration,
         SupplierTermsMigration supplierTermsMigration,
+        SupplierTermDeviationsMigration supplierTermDeviationsMigration,
+        SupplierTechnicalParameterMigration supplierTechnicalParameterMigration,
         TaxCodeMasterMigration taxCodeMasterMigration,
         CompanyMasterMigration companyMasterMigration,
         PurchaseOrganizationMasterMigration purchaseOrganizationMigration,
@@ -182,6 +186,8 @@ public class MigrationController : Controller
         _userPriceBidNonPricingMigration = userPriceBidNonPricingMigration;
         _userCompanyMasterMigration = userCompanyMasterMigration;
         _supplierTermsMigration = supplierTermsMigration;
+        _supplierTermDeviationsMigration = supplierTermDeviationsMigration;
+        _supplierTechnicalParameterMigration = supplierTechnicalParameterMigration;
         _taxCodeMasterMigration = taxCodeMasterMigration;
         _companyMasterMigration = companyMasterMigration;
         _purchaseOrganizationMigration = purchaseOrganizationMigration;
@@ -245,6 +251,8 @@ public class MigrationController : Controller
             new {name = "userpricebidnonpricing", description = "TBL_PB_BuyerNonPricing to user_price_bid_lot_charges (Non Pricing)" },
             new {name = "usercompanymaster", description = "TBL_UserClientMaster to user_company_master" },
             new {name = "supplierterms", description = "TBL_VENDORDEVIATIONMASTER to supplier_terms" },
+            new {name = "suppliertermdeviations", description = "TBL_VENDORDEVIATIONTRN to supplier_term_deviations" },
+            new {name = "suppliertechnicalparameter", description = "TBL_VendorTechItemTerm to supplier_technical_parameter" },
             new {name = "arcapprovalauthority", description = "TBL_ARCApprovalAuthority to arc_workflow" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
@@ -537,6 +545,16 @@ public class MigrationController : Controller
             var mappings = _supplierTermsMigration.GetMappings();
             return Json(mappings);
         }
+        else if (table.ToLower() == "suppliertermdeviations")
+        {
+            var mappings = _supplierTermDeviationsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "suppliertechnicalparameter")
+        {
+            var mappings = _supplierTechnicalParameterMigration.GetMappings();
+            return Json(mappings);
+        }
         else if (table.ToLower() == "arcapprovalauthority")
         {
             var mappings = _arcApprovalAuthorityMigration.GetMappings();
@@ -824,6 +842,14 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "supplierterms")
             {
                 recordCount = await _supplierTermsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "suppliertermdeviations")
+            {
+                recordCount = await _supplierTermDeviationsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "suppliertechnicalparameter")
+            {
+                recordCount = await _supplierTechnicalParameterMigration.MigrateAsync();
             }
             else if (request.Table.ToLower() == "usercompanymaster")
             {
