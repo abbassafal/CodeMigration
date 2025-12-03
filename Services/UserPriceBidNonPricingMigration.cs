@@ -7,22 +7,25 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Linq;
 
-public class TermMasterMigration : MigrationService
+public class UserPriceBidNonPricingMigration : MigrationService
 {
     private const int BATCH_SIZE = 1000;
-    private readonly ILogger<TermMasterMigration> _logger;
+    private readonly ILogger<UserPriceBidNonPricingMigration> _logger;
 
     protected override string SelectQuery => @"
         SELECT
-            TERMID,
-            TERMDESCRIPTION
-        FROM TBL_CLAUSETERMMASTER
-        ORDER BY TERMID";
+            PB_BuyerNonPricingId,
+            PB_NonPricingTitle,
+            EVENT_ID
+        FROM TBL_PB_BUYEROTHERCHARGES
+        ORDER BY PB_BuyerNonPricingId";
 
     protected override string InsertQuery => @"
-        INSERT INTO term_master (
-            term_master_id,
-            term_description,
+        INSERT INTO user_price_bid_lot_charges (
+            user_price_bid_lot_charges_id,
+            event_id,
+            price_bid_charges_id,
+            mandatory,
             created_by,
             created_date,
             modified_by,
@@ -31,8 +34,10 @@ public class TermMasterMigration : MigrationService
             deleted_by,
             deleted_date
         ) VALUES (
-            @term_master_id,
-            @term_description,
+            @user_price_bid_lot_charges_id,
+            @event_id,
+            @price_bid_charges_id,
+            @mandatory,
             @created_by,
             @created_date,
             @modified_by,
@@ -41,15 +46,17 @@ public class TermMasterMigration : MigrationService
             @deleted_by,
             @deleted_date
         )
-        ON CONFLICT (term_master_id) DO UPDATE SET
-            term_description = EXCLUDED.term_description,
+        ON CONFLICT (user_price_bid_lot_charges_id) DO UPDATE SET
+            event_id = EXCLUDED.event_id,
+            price_bid_charges_id = EXCLUDED.price_bid_charges_id,
+            mandatory = EXCLUDED.mandatory,
             modified_by = EXCLUDED.modified_by,
             modified_date = EXCLUDED.modified_date,
             is_deleted = EXCLUDED.is_deleted,
             deleted_by = EXCLUDED.deleted_by,
             deleted_date = EXCLUDED.deleted_date";
 
-    public TermMasterMigration(IConfiguration configuration, ILogger<TermMasterMigration> logger) : base(configuration)
+    public UserPriceBidNonPricingMigration(IConfiguration configuration, ILogger<UserPriceBidNonPricingMigration> logger) : base(configuration)
     {
         _logger = logger;
     }
@@ -58,15 +65,17 @@ public class TermMasterMigration : MigrationService
     {
         return new List<string>
         {
-            "Direct", // term_master_id
-            "Direct", // term_description
-            "Fixed",  // created_by
-            "Fixed",  // created_date
-            "Fixed",  // modified_by
-            "Fixed",  // modified_date
-            "Fixed",  // is_deleted
-            "Fixed",  // deleted_by
-            "Fixed"   // deleted_date
+            "Direct",  // user_price_bid_lot_charges_id
+            "Direct",  // event_id
+            "Fixed",   // price_bid_charges_id (NULL - NonePricingTitle not mapped)
+            "Fixed",   // mandatory
+            "Fixed",   // created_by
+            "Fixed",   // created_date
+            "Fixed",   // modified_by
+            "Fixed",   // modified_date
+            "Fixed",   // is_deleted
+            "Fixed",   // deleted_by
+            "Fixed"    // deleted_date
         };
     }
 
@@ -74,8 +83,11 @@ public class TermMasterMigration : MigrationService
     {
         return new List<object>
         {
-            new { source = "TERMID", logic = "TERMID -> term_master_id (Primary key, autoincrement)", target = "term_master_id" },
-            new { source = "TERMDESCRIPTION", logic = "TERMDESCRIPTION -> term_description (Direct)", target = "term_description" },
+            new { source = "PB_BuyerNonPricingId", logic = "PB_BuyerNonPricingId -> user_price_bid_lot_charges_id (Primary key, autoincrement - UserPriceBidNonPricingId)", target = "user_price_bid_lot_charges_id" },
+            new { source = "PB_NonPricingTitle", logic = "PB_NonPricingTitle -> NonePricingTitle (Not mapped to target table)", target = "-" },
+            new { source = "EVENT_ID", logic = "EVENT_ID -> event_id (Ref from table event master - EventId)", target = "event_id" },
+            new { source = "-", logic = "price_bid_charges_id -> NULL (Fixed Default)", target = "price_bid_charges_id" },
+            new { source = "-", logic = "mandatory -> false (Fixed Default)", target = "mandatory" },
             new { source = "-", logic = "created_by -> NULL (Fixed Default)", target = "created_by" },
             new { source = "-", logic = "created_date -> NULL (Fixed Default)", target = "created_date" },
             new { source = "-", logic = "modified_by -> NULL (Fixed Default)", target = "modified_by" },
@@ -93,7 +105,7 @@ public class TermMasterMigration : MigrationService
 
     protected override async Task<int> ExecuteMigrationAsync(SqlConnection sqlConn, NpgsqlConnection pgConn, NpgsqlTransaction? transaction = null)
     {
-        _logger.LogInformation("Starting Term Master migration...");
+        _logger.LogInformation("Starting User Price Bid Non Pricing migration...");
 
         int totalRecords = 0;
         int migratedRecords = 0;
@@ -113,21 +125,22 @@ public class TermMasterMigration : MigrationService
             {
                 totalRecords++;
 
-                var termId = reader["TERMID"];
-                var termDescription = reader["TERMDESCRIPTION"];
+                var pbBuyerNonPricingId = reader["PB_BuyerNonPricingId"];
+                var pbNonPricingTitle = reader["PB_NonPricingTitle"];
+                var eventId = reader["EVENT_ID"];
 
-                // Skip if TERMID is NULL
-                if (termId == DBNull.Value)
+                // Skip if PB_BuyerNonPricingId is NULL
+                if (pbBuyerNonPricingId == DBNull.Value)
                 {
                     skippedRecords++;
-                    _logger.LogWarning("Skipping record - TERMID is NULL");
+                    _logger.LogWarning("Skipping record - PB_BuyerNonPricingId is NULL");
                     continue;
                 }
 
-                int termIdValue = Convert.ToInt32(termId);
+                int pbBuyerNonPricingIdValue = Convert.ToInt32(pbBuyerNonPricingId);
 
                 // Skip duplicates
-                if (processedIds.Contains(termIdValue))
+                if (processedIds.Contains(pbBuyerNonPricingIdValue))
                 {
                     skippedRecords++;
                     continue;
@@ -135,8 +148,10 @@ public class TermMasterMigration : MigrationService
 
                 var record = new Dictionary<string, object>
                 {
-                    ["term_master_id"] = termIdValue,
-                    ["term_description"] = termDescription ?? DBNull.Value,
+                    ["user_price_bid_lot_charges_id"] = pbBuyerNonPricingIdValue,
+                    ["event_id"] = eventId ?? DBNull.Value,
+                    ["price_bid_charges_id"] = DBNull.Value, // PB_NonPricingTitle not mapped
+                    ["mandatory"] = false,
                     ["created_by"] = DBNull.Value,
                     ["created_date"] = DBNull.Value,
                     ["modified_by"] = DBNull.Value,
@@ -147,7 +162,7 @@ public class TermMasterMigration : MigrationService
                 };
 
                 batch.Add(record);
-                processedIds.Add(termIdValue);
+                processedIds.Add(pbBuyerNonPricingIdValue);
 
                 if (batch.Count >= BATCH_SIZE)
                 {
@@ -164,13 +179,13 @@ public class TermMasterMigration : MigrationService
                 migratedRecords += batchMigrated;
             }
 
-            _logger.LogInformation($"Term Master migration completed. Total: {totalRecords}, Migrated: {migratedRecords}, Skipped: {skippedRecords}");
+            _logger.LogInformation($"User Price Bid Non Pricing migration completed. Total: {totalRecords}, Migrated: {migratedRecords}, Skipped: {skippedRecords}");
 
             return migratedRecords;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during Term Master migration");
+            _logger.LogError(ex, "Error during User Price Bid Non Pricing migration");
             throw;
         }
     }

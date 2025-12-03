@@ -64,6 +64,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TechnicalParameterTemplateMigration>();
         services.AddScoped<TermMasterMigration>();
         services.AddScoped<TermTemplateMasterMigration>();
+        services.AddScoped<UserPriceBidLotChargesMigration>();
+        services.AddScoped<UserPriceBidNonPricingMigration>();
 
         return services;
     }

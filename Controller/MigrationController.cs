@@ -65,6 +65,8 @@ public class MigrationController : Controller
     private readonly TechnicalParameterTemplateMigration _technicalParameterTemplateMigration;
     private readonly TermMasterMigration _termMasterMigration;
     private readonly TermTemplateMasterMigration _termTemplateMasterMigration;
+    private readonly UserPriceBidLotChargesMigration _userPriceBidLotChargesMigration;
+    private readonly UserPriceBidNonPricingMigration _userPriceBidNonPricingMigration;
     private readonly IConfiguration _configuration;
     private readonly EventSettingMigrationService _eventSettingMigrationService;
     private readonly ILogger<MigrationController> _logger;
@@ -113,6 +115,8 @@ public class MigrationController : Controller
         TechnicalParameterTemplateMigration technicalParameterTemplateMigration,
         TermMasterMigration termMasterMigration,
         TermTemplateMasterMigration termTemplateMasterMigration,
+        UserPriceBidLotChargesMigration userPriceBidLotChargesMigration,
+        UserPriceBidNonPricingMigration userPriceBidNonPricingMigration,
         TaxCodeMasterMigration taxCodeMasterMigration,
         CompanyMasterMigration companyMasterMigration,
         PurchaseOrganizationMasterMigration purchaseOrganizationMigration,
@@ -170,6 +174,8 @@ public class MigrationController : Controller
         _technicalParameterTemplateMigration = technicalParameterTemplateMigration;
         _termMasterMigration = termMasterMigration;
         _termTemplateMasterMigration = termTemplateMasterMigration;
+        _userPriceBidLotChargesMigration = userPriceBidLotChargesMigration;
+        _userPriceBidNonPricingMigration = userPriceBidNonPricingMigration;
         _taxCodeMasterMigration = taxCodeMasterMigration;
         _companyMasterMigration = companyMasterMigration;
         _purchaseOrganizationMigration = purchaseOrganizationMigration;
@@ -229,6 +235,8 @@ public class MigrationController : Controller
             new {name = "technicalparametertemplate", description = "TBL_TECHPARAMAIN + TBL_TECHPARASUB to technical_parameter_template" },
             new {name = "termmaster", description = "TermMaster to term_master" },
             new {name = "termtemplatemaster", description = "TBL_CLAUSEMASTER to term_template_master" },
+            new {name = "userpricebidlotcharges", description = "TBL_PB_BUYEROTHERCHARGES to user_price_bid_lot_charges" },
+            new {name = "userpricebidnonpricing", description = "TBL_PB_BUYEROTHERCHARGES to user_price_bid_lot_charges (Non Pricing)" },
             new {name = "arcapprovalauthority", description = "TBL_ARCApprovalAuthority to arc_workflow" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
@@ -499,6 +507,16 @@ public class MigrationController : Controller
         else if (table.ToLower() == "termtemplatemaster")
         {
             var mappings = _termTemplateMasterMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "userpricebidlotcharges")
+        {
+            var mappings = _userPriceBidLotChargesMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "userpricebidnonpricing")
+        {
+            var mappings = _userPriceBidNonPricingMigration.GetMappings();
             return Json(mappings);
         }
         else if (table.ToLower() == "arcapprovalauthority")
@@ -772,6 +790,14 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "termtemplatemaster")
             {
                 recordCount = await _termTemplateMasterMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "userpricebidlotcharges")
+            {
+                recordCount = await _userPriceBidLotChargesMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "userpricebidnonpricing")
+            {
+                recordCount = await _userPriceBidNonPricingMigration.MigrateAsync();
             }
             else if (request.Table.ToLower() == "arcapprovalauthority")
             {

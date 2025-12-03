@@ -15,10 +15,7 @@ public class TermTemplateMasterMigration : MigrationService
     protected override string SelectQuery => @"
         SELECT
             CLAUSE_MASTER_ID,
-            REF_KEY,
-            DEFINATION,
-            SUBCLAUSE,
-            CLAUSE_MST_ID
+            REF_KEY
         FROM TBL_CLAUSEMASTER
         ORDER BY CLAUSE_MASTER_ID";
 
@@ -26,20 +23,31 @@ public class TermTemplateMasterMigration : MigrationService
         INSERT INTO term_template_master (
             term_template_master_id,
             term_template_name,
-            term_template_name,
-            term_description,
-            term_master_id
+            created_by,
+            created_date,
+            modified_by,
+            modified_date,
+            is_deleted,
+            deleted_by,
+            deleted_date
         ) VALUES (
             @term_template_master_id,
             @term_template_name,
-            @term_template_name_2,
-            @term_description,
-            @term_master_id
+            @created_by,
+            @created_date,
+            @modified_by,
+            @modified_date,
+            @is_deleted,
+            @deleted_by,
+            @deleted_date
         )
         ON CONFLICT (term_template_master_id) DO UPDATE SET
             term_template_name = EXCLUDED.term_template_name,
-            term_description = EXCLUDED.term_description,
-            term_master_id = EXCLUDED.term_master_id";
+            modified_by = EXCLUDED.modified_by,
+            modified_date = EXCLUDED.modified_date,
+            is_deleted = EXCLUDED.is_deleted,
+            deleted_by = EXCLUDED.deleted_by,
+            deleted_date = EXCLUDED.deleted_date";
 
     public TermTemplateMasterMigration(IConfiguration configuration, ILogger<TermTemplateMasterMigration> logger) : base(configuration)
     {
@@ -51,10 +59,14 @@ public class TermTemplateMasterMigration : MigrationService
         return new List<string>
         {
             "Direct", // term_template_master_id
-            "Direct", // term_template_name (from REF_KEY)
-            "Direct", // term_template_name (from DEFINATION)
-            "Direct", // term_description
-            "Direct"  // term_master_id
+            "Direct", // term_template_name
+            "Fixed",  // created_by
+            "Fixed",  // created_date
+            "Fixed",  // modified_by
+            "Fixed",  // modified_date
+            "Fixed",  // is_deleted
+            "Fixed",  // deleted_by
+            "Fixed"   // deleted_date
         };
     }
 
@@ -64,9 +76,13 @@ public class TermTemplateMasterMigration : MigrationService
         {
             new { source = "CLAUSE_MASTER_ID", logic = "CLAUSE_MASTER_ID -> term_template_master_id (Primary key, autoincrement)", target = "term_template_master_id" },
             new { source = "REF_KEY", logic = "REF_KEY -> term_template_name (Direct)", target = "term_template_name" },
-            new { source = "DEFINATION", logic = "DEFINATION -> term_template_name (TermTemplateName)", target = "term_template_name" },
-            new { source = "SUBCLAUSE", logic = "SUBCLAUSE -> term_description (TERMDESCRIPTION)", target = "term_description" },
-            new { source = "CLAUSE_MST_ID", logic = "CLAUSE_MST_ID -> term_master_id (Ref from TermMaster Table, TermMasterId)", target = "term_master_id" }
+            new { source = "-", logic = "created_by -> NULL (Fixed Default)", target = "created_by" },
+            new { source = "-", logic = "created_date -> NULL (Fixed Default)", target = "created_date" },
+            new { source = "-", logic = "modified_by -> NULL (Fixed Default)", target = "modified_by" },
+            new { source = "-", logic = "modified_date -> NULL (Fixed Default)", target = "modified_date" },
+            new { source = "-", logic = "is_deleted -> false (Fixed Default)", target = "is_deleted" },
+            new { source = "-", logic = "deleted_by -> NULL (Fixed Default)", target = "deleted_by" },
+            new { source = "-", logic = "deleted_date -> NULL (Fixed Default)", target = "deleted_date" }
         };
     }
 
@@ -85,10 +101,6 @@ public class TermTemplateMasterMigration : MigrationService
 
         try
         {
-            // Load valid term_master IDs
-            var validTermMasterIds = await LoadValidTermMasterIdsAsync(pgConn);
-            _logger.LogInformation($"Loaded {validTermMasterIds.Count} valid term master IDs");
-
             using var sqlCommand = new SqlCommand(SelectQuery, sqlConn);
             sqlCommand.CommandTimeout = 300;
 
@@ -103,9 +115,6 @@ public class TermTemplateMasterMigration : MigrationService
 
                 var clauseMasterId = reader["CLAUSE_MASTER_ID"];
                 var refKey = reader["REF_KEY"];
-                var defination = reader["DEFINATION"];
-                var subClause = reader["SUBCLAUSE"];
-                var clauseMstId = reader["CLAUSE_MST_ID"];
 
                 // Skip if CLAUSE_MASTER_ID is NULL
                 if (clauseMasterId == DBNull.Value)
@@ -124,25 +133,17 @@ public class TermTemplateMasterMigration : MigrationService
                     continue;
                 }
 
-                // Validate term_master_id (CLAUSE_MST_ID)
-                if (clauseMstId != DBNull.Value)
-                {
-                    int clauseMstIdValue = Convert.ToInt32(clauseMstId);
-                    if (!validTermMasterIds.Contains(clauseMstIdValue))
-                    {
-                        skippedRecords++;
-                        _logger.LogWarning($"Skipping CLAUSE_MASTER_ID {clauseMasterIdValue} - Invalid term_master_id: {clauseMstIdValue}");
-                        continue;
-                    }
-                }
-
                 var record = new Dictionary<string, object>
                 {
                     ["term_template_master_id"] = clauseMasterIdValue,
                     ["term_template_name"] = refKey ?? DBNull.Value,
-                    ["term_template_name_2"] = defination ?? DBNull.Value,
-                    ["term_description"] = subClause ?? DBNull.Value,
-                    ["term_master_id"] = clauseMstId ?? DBNull.Value
+                    ["created_by"] = DBNull.Value,
+                    ["created_date"] = DBNull.Value,
+                    ["modified_by"] = DBNull.Value,
+                    ["modified_date"] = DBNull.Value,
+                    ["is_deleted"] = false,
+                    ["deleted_by"] = DBNull.Value,
+                    ["deleted_date"] = DBNull.Value
                 };
 
                 batch.Add(record);
@@ -172,31 +173,6 @@ public class TermTemplateMasterMigration : MigrationService
             _logger.LogError(ex, "Error during Term Template Master migration");
             throw;
         }
-    }
-
-    private async Task<HashSet<int>> LoadValidTermMasterIdsAsync(NpgsqlConnection pgConn)
-    {
-        var validIds = new HashSet<int>();
-
-        try
-        {
-            var query = "SELECT term_master_id FROM term_master WHERE term_master_id IS NOT NULL";
-            using var command = new NpgsqlCommand(query, pgConn);
-            using var reader = await command.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
-            {
-                validIds.Add(reader.GetInt32(0));
-            }
-
-            _logger.LogInformation($"Loaded {validIds.Count} valid term master IDs from term_master");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading valid term master IDs");
-        }
-
-        return validIds;
     }
 
     private async Task<int> InsertBatchAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn, NpgsqlTransaction? transaction)

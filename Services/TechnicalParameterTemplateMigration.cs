@@ -24,7 +24,6 @@ public class TechnicalParameterTemplateMigration : MigrationService
     protected override string SelectQuery => @"
         SELECT 
             tps.TechParaSub_Id,
-            tpm.Item_Id,
             tpm.Title,
             tps.ParaName,
             tps.IsMandatory
@@ -35,7 +34,6 @@ public class TechnicalParameterTemplateMigration : MigrationService
     protected override string InsertQuery => @"
         INSERT INTO technical_parameter_template (
             technical_parameter_template_id,
-            item_id,
             template_name,
             technical_parameter_name,
             technical_parameter_mandatory,
@@ -48,7 +46,6 @@ public class TechnicalParameterTemplateMigration : MigrationService
             deleted_date
         ) VALUES (
             @technical_parameter_template_id,
-            @item_id,
             @template_name,
             @technical_parameter_name,
             @technical_parameter_mandatory,
@@ -62,7 +59,6 @@ public class TechnicalParameterTemplateMigration : MigrationService
         )
         ON CONFLICT (technical_parameter_template_id) 
         DO UPDATE SET
-            item_id = EXCLUDED.item_id,
             template_name = EXCLUDED.template_name,
             technical_parameter_name = EXCLUDED.technical_parameter_name,
             technical_parameter_mandatory = EXCLUDED.technical_parameter_mandatory,
@@ -77,7 +73,6 @@ public class TechnicalParameterTemplateMigration : MigrationService
         return new List<string>
         {
             "Direct",  // technical_parameter_template_id
-            "Direct",  // item_id
             "Direct",  // template_name
             "Direct",  // technical_parameter_name
             "Boolean", // technical_parameter_mandatory
@@ -96,7 +91,6 @@ public class TechnicalParameterTemplateMigration : MigrationService
         return new List<object>
         {
             new { source = "TechParaSub_Id", logic = "TechParaSub_Id -> technical_parameter_template_id (Primary key from TBL_TECHPARASUB)", target = "technical_parameter_template_id" },
-            new { source = "Item_Id", logic = "Item_Id -> item_id (Foreign key reference)", target = "item_id" },
             new { source = "Title", logic = "Title -> template_name (Template name from TBL_TECHPARAMAIN)", target = "template_name" },
             new { source = "ParaName", logic = "ParaName -> technical_parameter_name (Parameter name from TBL_TECHPARASUB)", target = "technical_parameter_name" },
             new { source = "IsMandatory", logic = "IsMandatory -> technical_parameter_mandatory (Boolean: 1=true, other=false)", target = "technical_parameter_mandatory" },
@@ -138,7 +132,6 @@ public class TechnicalParameterTemplateMigration : MigrationService
                 totalRecords++;
 
                 var techParaSubId = reader["TechParaSub_Id"];
-                var itemId = reader["Item_Id"];
                 var title = reader["Title"];
                 var paraName = reader["ParaName"];
                 var isMandatory = reader["IsMandatory"];
@@ -171,7 +164,6 @@ public class TechnicalParameterTemplateMigration : MigrationService
                 var record = new Dictionary<string, object>
                 {
                     ["technical_parameter_template_id"] = techParaSubIdValue,
-                    ["item_id"] = itemId,
                     ["template_name"] = title ?? DBNull.Value,
                     ["technical_parameter_name"] = paraName ?? DBNull.Value,
                     ["technical_parameter_mandatory"] = isMandatoryValue,
