@@ -41,6 +41,8 @@ public class MigrationController : Controller
     private readonly ErpCurrencyExchangeRateMigration _erpCurrencyExchangeRateMigration;
     private readonly AuctionMinMaxTargetPriceMigration _auctionMinMaxTargetPriceMigration;
     private readonly EventPriceBidColumnsMigration _eventPriceBidColumnsMigration;
+    private readonly EventFreezeCurrencyMigration _eventFreezeCurrencyMigration;
+    private readonly EventPublishMigration _eventPublishMigration;
     private readonly ILogger<MigrationController> _logger;
 
 
@@ -75,6 +77,8 @@ public class MigrationController : Controller
         ErpCurrencyExchangeRateMigration erpCurrencyExchangeRateMigration,
         AuctionMinMaxTargetPriceMigration auctionMinMaxTargetPriceMigration,
         EventPriceBidColumnsMigration eventPriceBidColumnsMigration,
+        EventFreezeCurrencyMigration eventFreezeCurrencyMigration,
+        EventPublishMigration eventPublishMigration,
         ILogger<MigrationController> logger)
     {
         _uomMigration = uomMigration;
@@ -107,6 +111,8 @@ public class MigrationController : Controller
         _erpCurrencyExchangeRateMigration = erpCurrencyExchangeRateMigration;
         _auctionMinMaxTargetPriceMigration = auctionMinMaxTargetPriceMigration;
         _eventPriceBidColumnsMigration = eventPriceBidColumnsMigration;
+        _eventFreezeCurrencyMigration = eventFreezeCurrencyMigration;
+        _eventPublishMigration = eventPublishMigration;
         _logger = logger;
     }
 
@@ -149,6 +155,8 @@ public class MigrationController : Controller
             new { name = "erpcurrencyexchangerate", description = "TBL_CurrencyConversionMaster to erp_currency_exchange_rate" },
             new { name = "auctionminmaxtargetprice", description = "TBL_MinMaxTargetPrice to auction_min_max_target_price" },
             new { name = "eventpricebidcolumns", description = "TBL_PB_BUYER to event_price_bid_columns (unpivot headers)" },
+            new { name = "eventfreezecurrency", description = "TBL_FreezeCurrency to event_freeze_currency" },
+            new { name = "eventpublish", description = "TBL_PublishEventAutoMailSend to event_publish" },
         };
         return Json(tables);
     }
@@ -294,6 +302,16 @@ public class MigrationController : Controller
         else if (table.ToLower() == "eventpricebidcolumns")
         {
             var mappings = _eventPriceBidColumnsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventfreezecurrency")
+        {
+            var mappings = _eventFreezeCurrencyMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventpublish")
+        {
+            var mappings = _eventPublishMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -478,6 +496,14 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "eventpricebidcolumns")
             {
                 recordCount = await _eventPriceBidColumnsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventfreezecurrency")
+            {
+                recordCount = await _eventFreezeCurrencyMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventpublish")
+            {
+                recordCount = await _eventPublishMigration.MigrateAsync();
             }
             else
             {
@@ -1112,6 +1138,36 @@ public class MigrationController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred during event_price_bid_columns migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-freeze-currency/migrate")]
+    public async Task<IActionResult> MigrateEventFreezeCurrency()
+    {
+        try
+        {
+            var migratedCount = await _eventFreezeCurrencyMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_freeze_currency records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_freeze_currency migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-publish/migrate")]
+    public async Task<IActionResult> MigrateEventPublish()
+    {
+        try
+        {
+            var migratedCount = await _eventPublishMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_publish records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_publish migration.");
             return StatusCode(500, new { Error = "An error occurred during migration." });
         }
     }

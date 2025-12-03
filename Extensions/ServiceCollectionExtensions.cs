@@ -36,6 +36,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ErpCurrencyExchangeRateMigration>();
         services.AddTransient<AuctionMinMaxTargetPriceMigration>();
         services.AddTransient<EventPriceBidColumnsMigration>();
+        services.AddTransient<EventFreezeCurrencyMigration>();
+        services.AddTransient<EventPublishMigration>();
 
         return services;
     }
