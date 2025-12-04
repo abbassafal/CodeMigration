@@ -72,7 +72,7 @@ SELECT
     pm.RequestBy AS erp_request_by,
     t.RequestDate AS erp_change_on_date,
     t.DeliveryDate AS delivery_date,
-    0 AS is_closed,
+    CASE WHEN t.IsClosed = 'X' THEN 1 ELSE 0 END AS is_closed,
     0 AS created_by,
     NULL AS created_date,
     0 AS modified_by,

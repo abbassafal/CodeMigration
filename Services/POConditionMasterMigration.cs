@@ -104,14 +104,12 @@ public class POConditionMasterMigration : MigrationService
                         continue;
                     }
 
-                    // Lookup po_doc_type_id from po_doc_type_master table based on POType
-                    int? poDocTypeId = 1;
 
                     pgCmd.Parameters.Clear();
                     pgCmd.Parameters.AddWithValue("@po_condition_id", poConditionTypeId);
                     pgCmd.Parameters.AddWithValue("@po_condition_code", poConditionTypeCode ?? "");
                     pgCmd.Parameters.AddWithValue("@po_condition_name", poConditionTypeDesc ?? "");
-                    pgCmd.Parameters.AddWithValue("@po_doc_type_id", poDocTypeId.Value);
+                    pgCmd.Parameters.AddWithValue("@po_doc_type_id", poType ?? "");
                     pgCmd.Parameters.AddWithValue("@company_id", clientSAPId);
                     pgCmd.Parameters.AddWithValue("@created_by", 0); // Default: 0
                     pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow); // Default: Now

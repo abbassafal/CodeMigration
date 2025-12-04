@@ -266,7 +266,7 @@ public class EventMasterMigration : MigrationService
             "EVENTNAME -> event_name (Direct)",
             "EVENTDESC -> event_description (Direct)",
             "ROUND -> round (Direct)",
-            "EVENTTYPE -> event_type (Transform: 1=RFQ, 2=Forward Auction, 3=Reverse Auction)",
+            "EVENTTYPE -> event_type (Transform: 1=RFQ, 2=Reverse Auction, 3=Forward Auction)",
             "CURRENTSTATUS -> event_status (Direct)",
             "PARENTID -> parent_id (Direct, 0 if NULL)",
             "price_bid_template -> TBL_PB_BUYER.PBType (Lookup: 1=material, 14=service)",
@@ -700,8 +700,8 @@ public class EventMasterMigration : MigrationService
         var eventType = raw.EventType switch
         {
             1 => "RFQ",
-            2 => "Forward Auction",
-            3 => "Reverse Auction",
+            2 => "Reverse Auction",
+            3 => "Forward Auction",
             _ => $"Unknown_{raw.EventType}"
         };
 
