@@ -22,7 +22,7 @@ public class NfaHeaderMigration : MigrationService
             AWARDEVENTMAINID,
             AwardNo,
             EventId,
-            SupplierId,
+            VendorId,
             TotalLotCharges,
             TotalCSValue,
             TotalGSTAmount,
@@ -31,14 +31,14 @@ public class NfaHeaderMigration : MigrationService
             GrandDiscountPer,
             ItemTotal,
             PaymentTermsId,
-            IncotermId,
+            IncotermsId,
             POType,
             PONo,
             POHeaderText,
             PurchasingOrgId,
             PurchasingGroupId,
             PaymentTermsRemarks,
-            IncotermRemarks,
+            IncotermsRemarks,
             SONo,
             OrgVendorId,
             IsSilverAnglePO,
@@ -56,10 +56,10 @@ public class NfaHeaderMigration : MigrationService
             ClientsAPId,
             PlantId,
             TechnicallyAppoved,
-            CommercialTC,
-            Meetingdeliverytimelinexpectation,
+            CommerclalTC,
+            Meetingdeliverytimelineexpectation,
             Meetingqualityrequirement,
-            Purchaseordershouldbeallottedto1supplier,
+            PurchaseordershouldbeallottedtoL1supplier,
             StandaloneBriefNote,
             AdditionalDocument,
             SALES_PERSON,
@@ -104,7 +104,7 @@ public class NfaHeaderMigration : MigrationService
             purchase_group_code,
             incoterm_remark,
             repeat_poid,
-            summary_note,
+            summery_note,
             closing_negotiation_note,
             arcpo_id,
             header_note,
@@ -115,11 +115,11 @@ public class NfaHeaderMigration : MigrationService
             company_id,
             plant_id,
             plant_code,
-            technically_approved,
-            commercial_tc,
+            technically_appoved,
+            commerclal_tc,
             meeting_delivery_timeline_expectation,
             meeting_quality_requirement,
-            purchase_order_should_be_allotted_to_i1_supplier,
+            purchase_order_should_be_allotted_to_l1_supplier,
             brief_note,
             nfa_primt_file_path,
             nfa_primt_file_name,
@@ -166,7 +166,7 @@ public class NfaHeaderMigration : MigrationService
             @purchase_group_code,
             @incoterm_remark,
             @repeat_poid,
-            @summary_note,
+            @summery_note,
             @closing_negotiation_note,
             @arcpo_id,
             @header_note,
@@ -177,11 +177,11 @@ public class NfaHeaderMigration : MigrationService
             @company_id,
             @plant_id,
             @plant_code,
-            @technically_approved,
-            @commercial_tc,
+            @technically_appoved,
+            @commerclal_tc,
             @meeting_delivery_timeline_expectation,
             @meeting_quality_requirement,
-            @purchase_order_should_be_allotted_to_i1_supplier,
+            @purchase_order_should_be_allotted_to_l1_supplier,
             @brief_note,
             @nfa_primt_file_path,
             @nfa_primt_file_name,
@@ -228,7 +228,7 @@ public class NfaHeaderMigration : MigrationService
             purchase_group_code = EXCLUDED.purchase_group_code,
             incoterm_remark = EXCLUDED.incoterm_remark,
             repeat_poid = EXCLUDED.repeat_poid,
-            summary_note = EXCLUDED.summary_note,
+            summery_note = EXCLUDED.summery_note,
             closing_negotiation_note = EXCLUDED.closing_negotiation_note,
             arcpo_id = EXCLUDED.arcpo_id,
             header_note = EXCLUDED.header_note,
@@ -239,11 +239,11 @@ public class NfaHeaderMigration : MigrationService
             company_id = EXCLUDED.company_id,
             plant_id = EXCLUDED.plant_id,
             plant_code = EXCLUDED.plant_code,
-            technically_approved = EXCLUDED.technically_approved,
-            commercial_tc = EXCLUDED.commercial_tc,
+            technically_appoved = EXCLUDED.technically_appoved,
+            commerclal_tc = EXCLUDED.commerclal_tc,
             meeting_delivery_timeline_expectation = EXCLUDED.meeting_delivery_timeline_expectation,
             meeting_quality_requirement = EXCLUDED.meeting_quality_requirement,
-            purchase_order_should_be_allotted_to_i1_supplier = EXCLUDED.purchase_order_should_be_allotted_to_i1_supplier,
+            purchase_order_should_be_allotted_to_l1_supplier = EXCLUDED.purchase_order_should_be_allotted_to_l1_supplier,
             brief_note = EXCLUDED.brief_note,
             nfa_primt_file_path = EXCLUDED.nfa_primt_file_path,
             nfa_primt_file_name = EXCLUDED.nfa_primt_file_name,
@@ -292,7 +292,7 @@ public class NfaHeaderMigration : MigrationService
             "Lookup",  // purchase_group_code
             "Direct",  // incoterm_remark
             "Direct",  // repeat_poid
-            "Direct",  // summary_note
+            "Direct",  // summery_note
             "Direct",  // closing_negotiation_note
             "Direct",  // arcpo_id
             "Direct",  // header_note
@@ -303,11 +303,11 @@ public class NfaHeaderMigration : MigrationService
             "Direct",  // company_id
             "Direct",  // plant_id
             "Lookup",  // plant_code
-            "Direct",  // technically_approved
-            "Direct",  // commercial_tc
+            "Direct",  // technically_appoved
+            "Direct",  // commerclal_tc
             "Direct",  // meeting_delivery_timeline_expectation
             "Direct",  // meeting_quality_requirement
-            "Direct",  // purchase_order_should_be_allotted_to_i1_supplier
+            "Direct",  // purchase_order_should_be_allotted_to_l1_supplier
             "Direct",  // brief_note
             "Direct",  // nfa_primt_file_path
             "Direct",  // nfa_primt_file_name
@@ -340,7 +340,7 @@ public class NfaHeaderMigration : MigrationService
             new { source = "AWARDEVENTMAINID", logic = "AWARDEVENTMAINID -> nfa_header_id (Primary key - NFAHeaderID)", target = "nfa_header_id" },
             new { source = "AwardNo", logic = "AwardNo -> nfa_number (NFANumber)", target = "nfa_number" },
             new { source = "EventId", logic = "EventId -> event_id (Foreign key to event_master - EventId)", target = "event_id" },
-            new { source = "SupplierId", logic = "SupplierId -> supplier_id (Foreign key to supplier_master - SupplierId)", target = "supplier_id" },
+            new { source = "VendorId", logic = "VendorId -> supplier_id (Foreign key to supplier_master - SupplierId)", target = "supplier_id" },
             new { source = "TotalLotCharges", logic = "TotalLotCharges -> lot_total (SubTotal)", target = "lot_total" },
             new { source = "TotalCSValue", logic = "TotalCSValue -> total_before_tax (TotalNFAValue)", target = "total_before_tax" },
             new { source = "TotalGSTAmount", logic = "TotalGSTAmount -> total_tax_value (TotalTaxValue)", target = "total_tax_value" },
@@ -349,7 +349,7 @@ public class NfaHeaderMigration : MigrationService
             new { source = "ItemTotal", logic = "ItemTotal -> item_total (ItemTotal)", target = "item_total" },
             new { source = "PaymentTermsId", logic = "PaymentTermsId -> payment_term_id (Foreign key to payment_term_master - PaymentTermId)", target = "payment_term_id" },
             new { source = "-", logic = "payment_term_code -> Lookup from payment_term_master (PaymentTermCode)", target = "payment_term_code" },
-            new { source = "IncotermId", logic = "IncotermId -> incoterm_id (Foreign key to incoterm_master - IncoTermId)", target = "incoterm_id" },
+            new { source = "IncotermsId", logic = "IncotermsId -> incoterm_id (Foreign key to incoterm_master - IncoTermId)", target = "incoterm_id" },
             new { source = "-", logic = "incoterm_code -> Lookup from incoterm_master (IncoTermCode)", target = "incoterm_code" },
             new { source = "-", logic = "po_doc_type_id -> Lookup from po_doc_type_master via POType (PODocTypeId)", target = "po_doc_type_id" },
             new { source = "POType", logic = "POType -> po_doc_type_code (PODocTypeCode)", target = "po_doc_type_code" },
@@ -359,12 +359,11 @@ public class NfaHeaderMigration : MigrationService
             new { source = "-", logic = "purchase_organization_code -> Lookup from purchase_organization_master (PurchaseOrganizationCode)", target = "purchase_organization_code" },
             new { source = "PurchasingGroupId", logic = "PurchasingGroupId -> purchase_group_id (Foreign key to purchase_group_master - PurchaseGroupId)", target = "purchase_group_id" },
             new { source = "-", logic = "purchase_group_code -> Lookup from purchase_group_master (PurchaseGroupCode)", target = "purchase_group_code" },
-            new { source = "IncotermRemarks", logic = "IncotermRemarks -> incoterm_remark (IncotermsRemarks)", target = "incoterm_remark" },
+            new { source = "IncotermsRemarks", logic = "IncotermsRemarks -> incoterm_remark (IncotermsRemarks)", target = "incoterm_remark" },
             new { source = "AWARDEVENTMAINREFID", logic = "AWARDEVENTMAINREFID -> repeat_poid (RepeatPOID)", target = "repeat_poid" },
-            new { source = "SummaryNote", logic = "SummaryNote -> summary_note (SummeryNote)", target = "summary_note" },
+            new { source = "SummaryNote", logic = "SummaryNote -> summery_note (SummeryNote)", target = "summery_note" },
             new { source = "ClosingNegotiationNote", logic = "ClosingNegotiationNote -> closing_negotiation_note (ClosingNegotiationNote)", target = "closing_negotiation_note" },
-            new { source = "ARCMainId", logic = "ARCMainId -> arcpo_id (ARCId - Primary mapping)", target = "arcpo_id" },
-            new { source = "PRtoARCPOMAINId", logic = "PRtoARCPOMAINId -> arcpo_id (ARCPOId - Alternative/Fallback)", target = "arcpo_id" },
+            new { source = "ARCMainId", logic = "ARCMainId -> arcpo_id (ARCId - Primary, fallback to PRtoARCPOMAINId)", target = "arcpo_id" },
             new { source = "HeaderNote", logic = "HeaderNote -> header_note (HeaderNote)", target = "header_note" },
             new { source = "IsNFAChecked", logic = "IsNFAChecked -> nfa_for_review (NFAforReview)", target = "nfa_for_review" },
             new { source = "AttachmentPath", logic = "AttachmentPath -> auction_chart_file_path (AuctionChartFilePath)", target = "auction_chart_file_path" },
@@ -373,11 +372,11 @@ public class NfaHeaderMigration : MigrationService
             new { source = "ClientsAPId", logic = "ClientsAPId -> company_id (Foreign key to company_master - CompanyId)", target = "company_id" },
             new { source = "PlantId", logic = "PlantId -> plant_id (Foreign key to plant_master - PlantId)", target = "plant_id" },
             new { source = "-", logic = "plant_code -> Lookup from plant_master (PlantCode)", target = "plant_code" },
-            new { source = "TechnicallyAppoved", logic = "TechnicallyAppoved -> technically_approved (TechnicallyApproved)", target = "technically_approved" },
-            new { source = "CommercialTC", logic = "CommercialTC -> commercial_tc (CommercialJustification)", target = "commercial_tc" },
-            new { source = "Meetingdeliverytimelinexpectation", logic = "Meetingdeliverytimelinexpectation -> meeting_delivery_timeline_expectation (Meetingdeliverytimelineexpectation)", target = "meeting_delivery_timeline_expectation" },
+            new { source = "TechnicallyAppoved", logic = "TechnicallyAppoved -> technically_appoved (TechnicallyAppoved)", target = "technically_appoved" },
+            new { source = "CommerclalTC", logic = "CommerclalTC -> commerclal_tc (CommerclalTC)", target = "commerclal_tc" },
+            new { source = "Meetingdeliverytimelineexpectation", logic = "Meetingdeliverytimelineexpectation -> meeting_delivery_timeline_expectation (Meetingdeliverytimelineexpectation)", target = "meeting_delivery_timeline_expectation" },
             new { source = "Meetingqualityrequirement", logic = "Meetingqualityrequirement -> meeting_quality_requirement (Meetingqualityrequirement)", target = "meeting_quality_requirement" },
-            new { source = "Purchaseordershouldbeallottedto1supplier", logic = "Purchaseordershouldbeallottedto1supplier -> purchase_order_should_be_allotted_to_i1_supplier (Purchaseordershouldbeallottedto1supplier)", target = "purchase_order_should_be_allotted_to_i1_supplier" },
+            new { source = "PurchaseordershouldbeallottedtoL1supplier", logic = "PurchaseordershouldbeallottedtoL1supplier -> purchase_order_should_be_allotted_to_l1_supplier (PurchaseordershouldbeallottedtoL1supplier)", target = "purchase_order_should_be_allotted_to_l1_supplier" },
             new { source = "StandaloneBriefNote", logic = "StandaloneBriefNote -> brief_note (BriefNote)", target = "brief_note" },
             new { source = "-", logic = "nfa_primt_file_path -> Empty/NULL (NFAPrintFilePath)", target = "nfa_primt_file_path" },
             new { source = "AdditionalDocument", logic = "AdditionalDocument -> nfa_primt_file_name (NFAPrintFileName)", target = "nfa_primt_file_name" },
@@ -462,7 +461,7 @@ public class NfaHeaderMigration : MigrationService
                     paymentTermCode = paymentTermCodes[Convert.ToInt32(paymentTermId)];
                 }
 
-                var incotermId = reader["IncotermId"];
+                var incotermId = reader["IncotermsId"];
                 string? incotermCode = null;
                 if (incotermId != DBNull.Value && incotermCodes.ContainsKey(Convert.ToInt32(incotermId)))
                 {
@@ -502,7 +501,7 @@ public class NfaHeaderMigration : MigrationService
                     ["nfa_header_id"] = awardEventMainIdValue,
                     ["nfa_number"] = reader["AwardNo"] ?? DBNull.Value,
                     ["event_id"] = reader["EventId"] ?? DBNull.Value,
-                    ["supplier_id"] = reader["SupplierId"] ?? DBNull.Value,
+                    ["supplier_id"] = reader["VendorId"] ?? DBNull.Value,
                     ["lot_total"] = reader["TotalLotCharges"] ?? DBNull.Value,
                     ["total_before_tax"] = reader["TotalCSValue"] ?? DBNull.Value,
                     ["total_tax_value"] = reader["TotalGSTAmount"] ?? DBNull.Value,
@@ -520,9 +519,9 @@ public class NfaHeaderMigration : MigrationService
                     ["purchase_organization_code"] = purchaseOrgCode ?? (object)DBNull.Value,
                     ["purchase_group_id"] = purchasingGroupId ?? DBNull.Value,
                     ["purchase_group_code"] = purchaseGroupCode ?? (object)DBNull.Value,
-                    ["incoterm_remark"] = reader["IncotermRemarks"] ?? DBNull.Value,
+                    ["incoterm_remark"] = reader["IncotermsRemarks"] ?? DBNull.Value,
                     ["repeat_poid"] = reader["AWARDEVENTMAINREFID"] ?? DBNull.Value,
-                    ["summary_note"] = reader["SummaryNote"] ?? DBNull.Value,
+                    ["summery_note"] = reader["SummaryNote"] ?? DBNull.Value,
                     ["closing_negotiation_note"] = reader["ClosingNegotiationNote"] ?? DBNull.Value,
                     ["arcpo_id"] = reader["ARCMainId"] != DBNull.Value ? reader["ARCMainId"] : (reader["PRtoARCPOMAINId"] ?? DBNull.Value),
                     ["header_note"] = reader["HeaderNote"] ?? DBNull.Value,
@@ -533,11 +532,11 @@ public class NfaHeaderMigration : MigrationService
                     ["company_id"] = reader["ClientsAPId"] ?? DBNull.Value,
                     ["plant_id"] = plantId ?? DBNull.Value,
                     ["plant_code"] = plantCode ?? (object)DBNull.Value,
-                    ["technically_approved"] = reader["TechnicallyAppoved"] ?? DBNull.Value,
-                    ["commercial_tc"] = reader["CommercialTC"] ?? DBNull.Value,
-                    ["meeting_delivery_timeline_expectation"] = reader["Meetingdeliverytimelinexpectation"] ?? DBNull.Value,
+                    ["technically_appoved"] = reader["TechnicallyAppoved"] ?? DBNull.Value,
+                    ["commerclal_tc"] = reader["CommerclalTC"] ?? DBNull.Value,
+                    ["meeting_delivery_timeline_expectation"] = reader["Meetingdeliverytimelineexpectation"] ?? DBNull.Value,
                     ["meeting_quality_requirement"] = reader["Meetingqualityrequirement"] ?? DBNull.Value,
-                    ["purchase_order_should_be_allotted_to_i1_supplier"] = reader["Purchaseordershouldbeallottedto1supplier"] ?? DBNull.Value,
+                    ["purchase_order_should_be_allotted_to_l1_supplier"] = reader["PurchaseordershouldbeallottedtoL1supplier"] ?? DBNull.Value,
                     ["brief_note"] = reader["StandaloneBriefNote"] ?? DBNull.Value,
                     ["nfa_primt_file_path"] = DBNull.Value,
                     ["nfa_primt_file_name"] = reader["AdditionalDocument"] ?? DBNull.Value,
@@ -737,6 +736,7 @@ public class NfaHeaderMigration : MigrationService
         {
             await transaction.RollbackAsync();
             _logger.LogError(ex, $"Error inserting batch of {batch.Count} records. Batch rolled back.");
+            throw;
         }
 
         return insertedCount;
