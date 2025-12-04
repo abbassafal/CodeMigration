@@ -184,6 +184,12 @@ public class MigrationController : Controller
         return View();
     }
 
+    [HttpGet("SequentialMigration")]
+    public IActionResult SequentialMigration()
+    {
+        return View();
+    }
+
 
     [HttpGet("GetTables")]
     public IActionResult GetTables()

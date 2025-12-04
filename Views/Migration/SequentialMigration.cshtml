@@ -1,0 +1,926 @@
+@{
+    ViewData["Title"] = "Sequential Migration Executor";
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sequential Migration Executor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 30px;
+            min-height: calc(100vh - 200px);
+        }
+
+        .panel {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .panel-header h2 {
+            color: #333;
+            font-size: 1.8em;
+        }
+
+        .panel-header .badge {
+            background: #667eea;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .control-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-pause {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-overview {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .stat-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .stat-card.error {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+
+        .stat-card.pending {
+            background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .progress-bar-container {
+            background: #e9ecef;
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .timeline-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            position: relative;
+            padding-left: 40px;
+        }
+
+        .timeline-item:not(:last-child)::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 35px;
+            width: 2px;
+            height: calc(100% + 10px);
+            background: #dee2e6;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            left: 0;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            z-index: 1;
+        }
+
+        .timeline-marker.pending {
+            background: #6c757d;
+        }
+
+        .timeline-marker.running {
+            background: #ffc107;
+            animation: pulse 1.5s infinite;
+        }
+
+        .timeline-marker.success {
+            background: #28a745;
+        }
+
+        .timeline-marker.error {
+            background: #dc3545;
+        }
+
+        @@keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .timeline-content {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .timeline-content.success {
+            border-left-color: #28a745;
+        }
+
+        .timeline-content.error {
+            border-left-color: #dc3545;
+        }
+
+        .timeline-content.running {
+            border-left-color: #ffc107;
+        }
+
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .timeline-title {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #333;
+        }
+
+        .timeline-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .timeline-status.pending {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        .timeline-status.running {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .timeline-status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .timeline-status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .timeline-details {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .timeline-time {
+            font-size: 0.85em;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .documentation-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 800px;
+            overflow-y: auto;
+        }
+
+        .doc-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .doc-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .doc-table th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .doc-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .doc-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .doc-table tr:hover {
+            background: #f1f3f5;
+        }
+
+        .log-entry {
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .log-entry.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+        }
+
+        .log-entry.success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+
+        .log-entry.warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+
+        .log-entry.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+
+        .log-timestamp {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #764ba2;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @@keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Sequential Migration Executor</h1>
+            <p>Automated Database Migration Pipeline - 103 Tables</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Left Panel: Control & Timeline -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Migration Control</h2>
+                    <span class="badge" id="statusBadge">Ready</span>
+                </div>
+
+                <div class="control-section">
+                    <div class="control-buttons">
+                        <button class="btn btn-start" id="btnStart" onclick="startMigration()">
+                            ▶ Start Migration
+                        </button>
+                        <button class="btn btn-pause" id="btnPause" onclick="pauseMigration()" disabled>
+                            ⏸ Pause
+                        </button>
+                        <button class="btn btn-stop" id="btnStop" onclick="stopMigration()" disabled>
+                            ⏹ Stop
+                        </button>
+                    </div>
+                </div>
+
+                <div class="progress-overview">
+                    <div class="progress-stats">
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalCount">103</div>
+                            <div class="stat-label">Total Tables</div>
+                        </div>
+                        <div class="stat-card success">
+                            <div class="stat-number" id="completedCount">0</div>
+                            <div class="stat-label">Completed</div>
+                        </div>
+                        <div class="stat-card error">
+                            <div class="stat-number" id="failedCount">0</div>
+                            <div class="stat-label">Failed</div>
+                        </div>
+                        <div class="stat-card pending">
+                            <div class="stat-number" id="pendingCount">103</div>
+                            <div class="stat-label">Pending</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%">0%</div>
+                    </div>
+                </div>
+
+                <div class="timeline-container" id="timelineContainer">
+                    <!-- Timeline items will be populated here -->
+                </div>
+            </div>
+
+            <!-- Right Panel: Live Documentation -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Live Documentation</h2>
+                    <span class="badge" id="docBadge">Real-time</span>
+                </div>
+
+                <div class="documentation-container" id="documentationContainer">
+                    <div class="doc-section">
+                        <h3>📊 Migration Summary</h3>
+                        <table class="doc-table">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody id="summaryTable">
+                                <tr>
+                                    <td>Start Time</td>
+                                    <td id="startTime">-</td>
+                                </tr>
+                                <tr>
+                                    <td>End Time</td>
+                                    <td id="endTime">-</td>
+                                </tr>
+                                <tr>
+                                    <td>Duration</td>
+                                    <td id="duration">-</td>
+                                </tr>
+                                <tr>
+                                    <td>Total Records Migrated</td>
+                                    <td id="totalRecords">0</td>
+                                </tr>
+                                <tr>
+                                    <td>Average Speed</td>
+                                    <td id="avgSpeed">-</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="doc-section">
+                        <h3>📝 Live Logs</h3>
+                        <div id="liveLog">
+                            <div class="log-entry info">
+                                <span class="log-timestamp">[READY]</span>
+                                <span>System initialized and ready to start migration...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="doc-section">
+                        <h3>📈 Detailed Results</h3>
+                        <div id="detailedResults">
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Table Name</th>
+                                        <th>Status</th>
+                                        <th>Records</th>
+                                        <th>Duration</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsTable">
+                                    <!-- Will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
+    <script>
+        // Migration configuration
+        const migrations = [
+            'company_master', 'users', 'valuation_type_master', 'country_master', 'currency_master',
+            'incoterm_master', 'material_group_master', 'payment_term_master', 'plant_master',
+            'purchase_group_master', 'po_doc_type_master', 'po_condition_master',
+            'purchase_organization_master', 'tax_code_master', 'tax_master', 'uom_master',
+            'price_bid_charges_master', 'term_master', 'term_template_master',
+            'type_of_category_master', 'user_company_master', 'workflow_master',
+            'workflow_master_history', 'workflow_amount', 'workflow_amount_history',
+            'workflow_approval_user', 'workflow_approval_user_history',
+            'erp_currency_exchange_rate', 'material_master', 'supplier_groupmaster',
+            'supplier_master', 'supplier_inactive', 'supplier_other_contact',
+            'supplier_payment_incoterm', 'supplier_bank_deails', 'erp_pr_lines',
+            'pr_boq_items', 'pr_attachments', 'event_master', 'event_items',
+            'event_boq_items', 'event_setting', 'event_setting_history',
+            'auction_min_max_target_price', 'auction_min_max_target_price_history',
+            'sourcelist_master', 'event_collaboration', 'assigned_event_vendor',
+            'event_freeze_currency', 'event_price_bid_columns', 'event_schedule',
+            'event_schedule_history', 'technical_documents', 'technical_parameter_template',
+            'user_term', 'user_technical_parameter', 'technical_approval_workflow',
+            'technical_approval_score', 'technical_approval_score_history',
+            'user_price_bid_lot_charges', 'user_price_bid_non_pricing', 'event_publish',
+            'event_communication_sender', 'event_communication_receiver',
+            'event_communication_attachment', 'supplier_price_bid_lot_price',
+            'supplier_price_bid_lot_price_history', 'event_supplier_price_bid',
+            'event_supplier_price_bid_history', 'event_supplier_line_item',
+            'event_supplier_line_item_history', 'supplier_price_bid_non_pricing',
+            'supplier_price_bid_non_pricing_history', 'supplier_price_boq_items',
+            'supplier_price_boq_items_history', 'supplier_price_bid_lot_charges',
+            'supplier_price_bid_lot_charges_history', 'supplier_price_bid_document',
+            'supplier_event_price_bid_columns', 'supplier_technical_parameter',
+            'supplier_terms', 'supplier_term_deviations', 'nfa_header', 'nfa_line',
+            'nfa_lot_charges', 'nfa_boq_items', 'nfa_attachments', 'nfa_clarification',
+            'nfa_po_condition', 'nfa_workflow', 'po_header', 'po_line', 'arc_header',
+            'arc_header_history', 'arc_lines', 'arc_lines_history', 'arc_plant',
+            'arc_plant_history', 'arc_workflow', 'arc_workflow_history',
+            'arc_attachements', 'arc_attachements_history', 'workflow_history'
+        ];
+
+        let currentIndex = 0;
+        let isPaused = false;
+        let isStopped = false;
+        let startTime = null;
+        let migrationResults = [];
+        let connection = null;
+
+        // Initialize SignalR
+        async function initializeSignalR() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/migrationProgressHub")
+                .build();
+
+            connection.on("ReceiveProgress", (message) => {
+                addLog(message, 'info');
+            });
+
+            try {
+                await connection.start();
+                addLog("Connected to migration hub", 'success');
+            } catch (err) {
+                addLog("Error connecting to hub: " + err, 'error');
+            }
+        }
+
+        // Initialize timeline
+        function initializeTimeline() {
+            const container = document.getElementById('timelineContainer');
+            container.innerHTML = '';
+
+            migrations.forEach((table, index) => {
+                const item = document.createElement('div');
+                item.className = 'timeline-item';
+                item.id = `timeline-${index}`;
+                item.innerHTML = `
+                    <div class="timeline-marker pending">${index + 1}</div>
+                    <div class="timeline-content">
+                        <div class="timeline-header">
+                            <div class="timeline-title">${table}</div>
+                            <div class="timeline-status pending">Pending</div>
+                        </div>
+                        <div class="timeline-details" id="details-${index}">Waiting to start...</div>
+                        <div class="timeline-time" id="time-${index}"></div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // Start migration
+        async function startMigration() {
+            if (currentIndex === 0) {
+                startTime = new Date();
+                document.getElementById('startTime').textContent = startTime.toLocaleString();
+            }
+
+            isPaused = false;
+            isStopped = false;
+
+            document.getElementById('btnStart').disabled = true;
+            document.getElementById('btnPause').disabled = false;
+            document.getElementById('btnStop').disabled = false;
+            document.getElementById('statusBadge').textContent = 'Running';
+
+            addLog('Starting sequential migration...', 'success');
+
+            await executeNextMigration();
+        }
+
+        // Pause migration
+        function pauseMigration() {
+            isPaused = true;
+            document.getElementById('btnStart').disabled = false;
+            document.getElementById('btnPause').disabled = true;
+            document.getElementById('statusBadge').textContent = 'Paused';
+            addLog('Migration paused', 'warning');
+        }
+
+        // Stop migration
+        function stopMigration() {
+            isStopped = true;
+            isPaused = false;
+            document.getElementById('btnStart').disabled = false;
+            document.getElementById('btnPause').disabled = true;
+            document.getElementById('btnStop').disabled = true;
+            document.getElementById('statusBadge').textContent = 'Stopped';
+            addLog('Migration stopped by user', 'error');
+        }
+
+        // Execute next migration
+        async function executeNextMigration() {
+            if (isStopped || currentIndex >= migrations.length) {
+                completeMigration();
+                return;
+            }
+
+            if (isPaused) {
+                return;
+            }
+
+            const tableName = migrations[currentIndex];
+            const startMigTime = new Date();
+
+            // Update UI
+            updateTimelineItem(currentIndex, 'running', 'Migrating...', '');
+
+            addLog(`Starting migration: ${tableName}`, 'info');
+
+            try {
+                // Call the migration API
+                const response = await fetch(`/Migration/Migrate/${tableName}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                const endMigTime = new Date();
+                const duration = ((endMigTime - startMigTime) / 1000).toFixed(2);
+
+                if (result.success) {
+                    migrationResults.push({
+                        table: tableName,
+                        status: 'success',
+                        records: result.recordsMigrated || 0,
+                        duration: duration
+                    });
+
+                    updateTimelineItem(currentIndex, 'success', 
+                        `✓ Migrated ${result.recordsMigrated || 0} records`, 
+                        `Completed in ${duration}s`);
+
+                    addLog(`✓ ${tableName}: ${result.recordsMigrated || 0} records migrated in ${duration}s`, 'success');
+                    addResultRow(currentIndex + 1, tableName, 'Success', result.recordsMigrated || 0, duration);
+                } else {
+                    migrationResults.push({
+                        table: tableName,
+                        status: 'error',
+                        records: 0,
+                        duration: duration
+                    });
+
+                    updateTimelineItem(currentIndex, 'error', 
+                        `✗ Error: ${result.message || 'Unknown error'}`, 
+                        `Failed after ${duration}s`);
+
+                    addLog(`✗ ${tableName}: ${result.message || 'Unknown error'}`, 'error');
+                    addResultRow(currentIndex + 1, tableName, 'Failed', 0, duration);
+                }
+            } catch (error) {
+                const endMigTime = new Date();
+                const duration = ((endMigTime - startMigTime) / 1000).toFixed(2);
+
+                migrationResults.push({
+                    table: tableName,
+                    status: 'error',
+                    records: 0,
+                    duration: duration
+                });
+
+                updateTimelineItem(currentIndex, 'error', 
+                    `✗ Error: ${error.message}`, 
+                    `Failed after ${duration}s`);
+
+                addLog(`✗ ${tableName}: ${error.message}`, 'error');
+                addResultRow(currentIndex + 1, tableName, 'Failed', 0, duration);
+            }
+
+            // Update statistics
+            updateStatistics();
+
+            currentIndex++;
+
+            // Continue to next migration after a short delay
+            if (currentIndex < migrations.length && !isStopped && !isPaused) {
+                setTimeout(() => executeNextMigration(), 500);
+            } else if (currentIndex >= migrations.length) {
+                completeMigration();
+            }
+        }
+
+        // Update timeline item
+        function updateTimelineItem(index, status, details, time) {
+            const item = document.getElementById(`timeline-${index}`);
+            const marker = item.querySelector('.timeline-marker');
+            const content = item.querySelector('.timeline-content');
+            const statusBadge = item.querySelector('.timeline-status');
+            const detailsDiv = document.getElementById(`details-${index}`);
+            const timeDiv = document.getElementById(`time-${index}`);
+
+            marker.className = `timeline-marker ${status}`;
+            content.className = `timeline-content ${status}`;
+            statusBadge.className = `timeline-status ${status}`;
+            statusBadge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            detailsDiv.textContent = details;
+            timeDiv.textContent = time;
+
+            // Scroll to current item
+            item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Update statistics
+        function updateStatistics() {
+            const completed = migrationResults.filter(r => r.status === 'success').length;
+            const failed = migrationResults.filter(r => r.status === 'error').length;
+            const pending = migrations.length - completed - failed;
+            const progress = Math.round((completed / migrations.length) * 100);
+            const totalRecords = migrationResults.reduce((sum, r) => sum + r.records, 0);
+
+            document.getElementById('completedCount').textContent = completed;
+            document.getElementById('failedCount').textContent = failed;
+            document.getElementById('pendingCount').textContent = pending;
+            document.getElementById('progressBar').style.width = progress + '%';
+            document.getElementById('progressBar').textContent = progress + '%';
+            document.getElementById('totalRecords').textContent = totalRecords.toLocaleString();
+
+            if (startTime) {
+                const currentTime = new Date();
+                const durationSec = Math.floor((currentTime - startTime) / 1000);
+                const minutes = Math.floor(durationSec / 60);
+                const seconds = durationSec % 60;
+                document.getElementById('duration').textContent = `${minutes}m ${seconds}s`;
+
+                if (completed > 0) {
+                    const avgSpeed = (totalRecords / durationSec).toFixed(2);
+                    document.getElementById('avgSpeed').textContent = `${avgSpeed} records/sec`;
+                }
+            }
+        }
+
+        // Add result row
+        function addResultRow(index, table, status, records, duration) {
+            const tbody = document.getElementById('resultsTable');
+            const row = document.createElement('tr');
+            
+            const statusColor = status === 'Success' ? '#28a745' : '#dc3545';
+            
+            row.innerHTML = `
+                <td>${index}</td>
+                <td><strong>${table}</strong></td>
+                <td style="color: ${statusColor}; font-weight: bold;">${status}</td>
+                <td>${records.toLocaleString()}</td>
+                <td>${duration}s</td>
+            `;
+            
+            tbody.appendChild(row);
+            
+            // Scroll to bottom of results
+            document.getElementById('detailedResults').scrollTop = document.getElementById('detailedResults').scrollHeight;
+        }
+
+        // Add log entry
+        function addLog(message, type = 'info') {
+            const logContainer = document.getElementById('liveLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span><span>${message}</span>`;
+            
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Complete migration
+        function completeMigration() {
+            const endTime = new Date();
+            document.getElementById('endTime').textContent = endTime.toLocaleString();
+            document.getElementById('btnStart').disabled = false;
+            document.getElementById('btnPause').disabled = true;
+            document.getElementById('btnStop').disabled = true;
+            document.getElementById('statusBadge').textContent = 'Completed';
+            
+            const completed = migrationResults.filter(r => r.status === 'success').length;
+            const failed = migrationResults.filter(r => r.status === 'error').length;
+            
+            addLog(`Migration completed! ${completed} successful, ${failed} failed.`, 
+                failed === 0 ? 'success' : 'warning');
+        }
+
+        // Initialize on page load
+        window.onload = function() {
+            initializeTimeline();
+            initializeSignalR();
+            addLog('Sequential Migration Executor initialized', 'success');
+            addLog(`${migrations.length} tables queued for migration`, 'info');
+        };
+    </script>
+</body>
+</html>
