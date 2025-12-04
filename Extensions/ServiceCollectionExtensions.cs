@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using DataMigration.Services;
 
 namespace Extensions;
 
@@ -48,6 +49,34 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WorkflowApprovalUserMigration>();
         services.AddScoped<WorkflowApprovalUserHistoryMigration>();
         services.AddTransient<EventSettingMigrationService>();
+        services.AddTransient<EventScheduleMigrationService>();
+        services.AddTransient<EventScheduleHistoryMigrationService>();
+        services.AddTransient<ErpCurrencyExchangeRateMigration>();
+        services.AddTransient<AuctionMinMaxTargetPriceMigration>();
+        services.AddTransient<EventPriceBidColumnsMigration>();
+        services.AddTransient<EventFreezeCurrencyMigration>();
+        services.AddTransient<EventPublishMigration>();
+        services.AddTransient<EventSupplierPriceBidMigration>();
+        services.AddTransient<EventSupplierLineItemMigration>();
+        services.AddTransient<SourceListMasterMigration>();
+        services.AddTransient<PriceBidChargesMasterMigration>();
+        services.AddTransient<PoHeaderMigration>();
+        services.AddTransient<PoLineMigration>();
+        services.AddTransient<SupplierBankDetailsMigration>();
+        services.AddTransient<SupplierEventPriceBidColumnsMigration>();
+        services.AddTransient<SupplierPriceBidLotChargesMigration>();
+        services.AddTransient<SupplierPriceBidLotPriceMigration>();
+        services.AddTransient<SupplierPriceBidDocumentMigration>();
+        services.AddTransient<SupplierPriceBoqItemsMigration>();
+        services.AddTransient<SupplierPriceBidNonPricingMigration>();
+        services.AddTransient<EventCommunicationSenderMigration>();
+        services.AddTransient<EventCommunicationReceiverMigration>();
+        services.AddTransient<EventCommunicationAttachmentMigration>();
+        services.AddTransient<NfaClarificationMigration>();
+        services.AddTransient<NfaBoqItemsMigration>();
+        services.AddTransient<NfaAttachmentsMigration>();
+        services.AddTransient<NfaPoConditionMigration>();
+        services.AddTransient<NfaWorkflowMigration>();
 
         services.AddScoped<PRAttachmentMigration>();
         services.AddScoped<PRBoqItemsMigration>();

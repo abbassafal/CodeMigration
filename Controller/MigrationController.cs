@@ -76,6 +76,34 @@ public class MigrationController : Controller
     private readonly NfaLotChargesMigration _nfaLotChargesMigration;
     private readonly IConfiguration _configuration;
     private readonly EventSettingMigrationService _eventSettingMigrationService;
+    private readonly EventScheduleMigrationService _eventScheduleMigrationService;
+    private readonly EventScheduleHistoryMigrationService _eventScheduleHistoryMigrationService;
+    private readonly ErpCurrencyExchangeRateMigration _erpCurrencyExchangeRateMigration;
+    private readonly AuctionMinMaxTargetPriceMigration _auctionMinMaxTargetPriceMigration;
+    private readonly EventPriceBidColumnsMigration _eventPriceBidColumnsMigration;
+    private readonly EventFreezeCurrencyMigration _eventFreezeCurrencyMigration;
+    private readonly EventPublishMigration _eventPublishMigration;
+    private readonly EventSupplierPriceBidMigration _eventSupplierPriceBidMigration;
+    private readonly EventSupplierLineItemMigration _eventSupplierLineItemMigration;
+    private readonly SourceListMasterMigration _sourceListMasterMigration;
+    private readonly PriceBidChargesMasterMigration _priceBidChargesMasterMigration;
+    private readonly PoHeaderMigration _poHeaderMigration;
+    private readonly PoLineMigration _poLineMigration;
+    private readonly SupplierBankDetailsMigration _supplierBankDetailsMigration;
+    private readonly SupplierEventPriceBidColumnsMigration _supplierEventPriceBidColumnsMigration;
+    private readonly SupplierPriceBidLotChargesMigration _supplierPriceBidLotChargesMigration;
+    private readonly SupplierPriceBidLotPriceMigration _supplierPriceBidLotPriceMigration;
+    private readonly SupplierPriceBidDocumentMigration _supplierPriceBidDocumentMigration;
+    private readonly SupplierPriceBoqItemsMigration _supplierPriceBoqItemsMigration;
+    private readonly SupplierPriceBidNonPricingMigration _supplierPriceBidNonPricingMigration;
+    private readonly EventCommunicationSenderMigration _eventCommunicationSenderMigration;
+    private readonly EventCommunicationReceiverMigration _eventCommunicationReceiverMigration;
+    private readonly EventCommunicationAttachmentMigration _eventCommunicationAttachmentMigration;
+    private readonly NfaClarificationMigration _nfaClarificationMigration;
+    private readonly NfaBoqItemsMigration _nfaBoqItemsMigration;
+    private readonly NfaAttachmentsMigration _nfaAttachmentsMigration;
+    private readonly NfaPoConditionMigration _nfaPoConditionMigration;
+    private readonly NfaWorkflowMigration _nfaWorkflowMigration;
     private readonly ILogger<MigrationController> _logger;
 
 
@@ -144,6 +172,34 @@ public class MigrationController : Controller
         IHubContext<MigrationProgressHub> hubContext,
         IConfiguration configuration,
         EventSettingMigrationService eventSettingMigrationService,
+        EventScheduleMigrationService eventScheduleMigrationService,
+        EventScheduleHistoryMigrationService eventScheduleHistoryMigrationService,
+        ErpCurrencyExchangeRateMigration erpCurrencyExchangeRateMigration,
+        AuctionMinMaxTargetPriceMigration auctionMinMaxTargetPriceMigration,
+        EventPriceBidColumnsMigration eventPriceBidColumnsMigration,
+        EventFreezeCurrencyMigration eventFreezeCurrencyMigration,
+        EventPublishMigration eventPublishMigration,
+        EventSupplierPriceBidMigration eventSupplierPriceBidMigration,
+        EventSupplierLineItemMigration eventSupplierLineItemMigration,
+        SourceListMasterMigration sourceListMasterMigration,
+        PriceBidChargesMasterMigration priceBidChargesMasterMigration,
+        PoHeaderMigration poHeaderMigration,
+        PoLineMigration poLineMigration,
+        SupplierBankDetailsMigration supplierBankDetailsMigration,
+        SupplierEventPriceBidColumnsMigration supplierEventPriceBidColumnsMigration,
+        SupplierPriceBidLotChargesMigration supplierPriceBidLotChargesMigration,
+        SupplierPriceBidLotPriceMigration supplierPriceBidLotPriceMigration,
+        SupplierPriceBidDocumentMigration supplierPriceBidDocumentMigration,
+        SupplierPriceBoqItemsMigration supplierPriceBoqItemsMigration,
+        SupplierPriceBidNonPricingMigration supplierPriceBidNonPricingMigration,
+        EventCommunicationSenderMigration eventCommunicationSenderMigration,
+        EventCommunicationReceiverMigration eventCommunicationReceiverMigration,
+        EventCommunicationAttachmentMigration eventCommunicationAttachmentMigration,
+        NfaClarificationMigration nfaClarificationMigration,
+        NfaBoqItemsMigration nfaBoqItemsMigration,
+        NfaAttachmentsMigration nfaAttachmentsMigration,
+        NfaPoConditionMigration nfaPoConditionMigration,
+        NfaWorkflowMigration nfaWorkflowMigration,
         ILogger<MigrationController> logger)
     {
         _uomMigration = uomMigration;
@@ -210,10 +266,44 @@ public class MigrationController : Controller
         _hubContext = hubContext;
         _configuration = configuration;
         _eventSettingMigrationService = eventSettingMigrationService;
+        _eventScheduleMigrationService = eventScheduleMigrationService;
+        _eventScheduleHistoryMigrationService = eventScheduleHistoryMigrationService;
+        _erpCurrencyExchangeRateMigration = erpCurrencyExchangeRateMigration;
+        _auctionMinMaxTargetPriceMigration = auctionMinMaxTargetPriceMigration;
+        _eventPriceBidColumnsMigration = eventPriceBidColumnsMigration;
+        _eventFreezeCurrencyMigration = eventFreezeCurrencyMigration;
+        _eventPublishMigration = eventPublishMigration;
+        _eventSupplierPriceBidMigration = eventSupplierPriceBidMigration;
+        _eventSupplierLineItemMigration = eventSupplierLineItemMigration;
+        _sourceListMasterMigration = sourceListMasterMigration;
+        _priceBidChargesMasterMigration = priceBidChargesMasterMigration;
+        _poHeaderMigration = poHeaderMigration;
+        _poLineMigration = poLineMigration;
+        _supplierBankDetailsMigration = supplierBankDetailsMigration;
+        _supplierEventPriceBidColumnsMigration = supplierEventPriceBidColumnsMigration;
+        _supplierPriceBidLotChargesMigration = supplierPriceBidLotChargesMigration;
+        _supplierPriceBidLotPriceMigration = supplierPriceBidLotPriceMigration;
+        _supplierPriceBidDocumentMigration = supplierPriceBidDocumentMigration;
+        _supplierPriceBoqItemsMigration = supplierPriceBoqItemsMigration;
+        _supplierPriceBidNonPricingMigration = supplierPriceBidNonPricingMigration;
+        _eventCommunicationSenderMigration = eventCommunicationSenderMigration;
+        _eventCommunicationReceiverMigration = eventCommunicationReceiverMigration;
+        _eventCommunicationAttachmentMigration = eventCommunicationAttachmentMigration;
+        _nfaClarificationMigration = nfaClarificationMigration;
+        _nfaBoqItemsMigration = nfaBoqItemsMigration;
+        _nfaAttachmentsMigration = nfaAttachmentsMigration;
+        _nfaPoConditionMigration = nfaPoConditionMigration;
+        _nfaWorkflowMigration = nfaWorkflowMigration;
         _logger = logger;
     }
 
     public IActionResult Index()
+    {
+        return View();
+    }
+
+    [HttpGet("SequentialMigration")]
+    public IActionResult SequentialMigration()
     {
         return View();
     }
@@ -285,6 +375,34 @@ public class MigrationController : Controller
             new { name = "workflowapprovaluser", description = "TBL_WorkFlowSubSub to workflow_approval_user" },
             new { name = "workflowapprovaluserhistory", description = "TBL_WorkFlowSubSub_History to workflow_approval_user_history" },
             new { name = "eventsetting", description = "TBL_EVENTMASTER to event_setting" },
+            new { name = "eventschedule", description = "TBL_EVENTSCHEDULEAR to event_schedule" },
+            new { name = "eventschedulehistory", description = "TBL_EVENTSCHEDULEAR to event_schedule_history" },
+            new { name = "erpcurrencyexchangerate", description = "TBL_CurrencyConversionMaster to erp_currency_exchange_rate" },
+            new { name = "auctionminmaxtargetprice", description = "TBL_MinMaxTargetPrice to auction_min_max_target_price" },
+            new { name = "eventpricebidcolumns", description = "TBL_PB_BUYER to event_price_bid_columns (unpivot headers)" },
+            new { name = "eventfreezecurrency", description = "TBL_FreezeCurrency to event_freeze_currency" },
+            new { name = "eventpublish", description = "TBL_PublishEventAutoMailSend to event_publish" },
+            new { name = "eventsupplierpricebid", description = "TBL_PB_SUPPLIER to event_supplier_price_bid (aggregated)" },
+            new { name = "eventsupplierlineitem", description = "TBL_PB_SUPPLIER to event_supplier_line_item" },
+            new { name = "sourcelistmaster", description = "tbl_InfoRecord to sourcelist_master" },
+            new { name = "pricebidchargesmaster", description = "TBL_PB_OTHERCHARGESMST to price_bid_charges_master" },
+            new { name = "poheader", description = "TBL_POMain to po_header" },
+            new { name = "poline", description = "TBL_PO_Sub to po_line" },
+            new { name = "supplierbankdetails", description = "tbl_VendorBankDetail to supplier_bank_deails" },
+            new { name = "suppliereventpricebidcolumns", description = "TBL_PB_SUPPLIER to supplier_event_price_bid_columns (HEADER unpivot)" },
+            new { name = "supplierpricebidlotcharges", description = "TBL_PB_SUPPLIEROTHERCHARGES to supplier_price_bid_lot_charges" },
+            new { name = "supplierpricebidlotprice", description = "TBL_PB_SUPPLIERLotPrice to supplier_price_bid_lot_price" },
+            new { name = "supplierpricebiddocument", description = "TBL_PB_SUPPLIER_ATTACHMENT to supplier_price_bid_document" },
+            new { name = "supplierpriceboqitems", description = "TBL_PB_SUPPLIER_SUB to supplier_price_boq_items (multi-table join)" },
+            new { name = "supplierpricebidnonpricing", description = "TBL_PB_SUPPLIERNonPricing to supplier_price_bid_non_pricing" },
+            new { name = "eventcommunicationsender", description = "TBL_MAILMSGMAIN to event_communication_sender" },
+            new { name = "eventcommunicationreceiver", description = "TBL_MAILMSGSUB to event_communication_receiver" },
+            new { name = "eventcommunicationattachment", description = "TBL_MailAttachment to event_communication_attachment (with document lookup)" },
+            new { name = "nfaclarification", description = "TBL_NFA_Clarification to nfa_clarification" },
+            new { name = "nfaboqitems", description = "Tbl_AwardEventItemSub to nfa_boq_items (multi-table join)" },
+            new { name = "nfaattachments", description = "TBL_QCSPOMailAttachmentFile + TBL_STANDALONENFAATTACHMENT to nfa_attachments" },
+            new { name = "nfapocondition", description = "TBL_AwardEventPoCondition to nfa_po_condition" },
+            new { name = "nfaworkflow", description = "TBL_StandAloneQCSApprovalAuthority to nfa_workflow" },
         };
         return Json(tables);
     }
@@ -585,6 +703,146 @@ public class MigrationController : Controller
         else if (table.ToLower() == "arcapprovalauthority")
         {
             var mappings = _arcApprovalAuthorityMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventschedule")
+        {
+            var mappings = _eventScheduleMigrationService.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventschedulehistory")
+        {
+            var mappings = _eventScheduleHistoryMigrationService.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "erpcurrencyexchangerate")
+        {
+            var mappings = _erpCurrencyExchangeRateMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "auctionminmaxtargetprice")
+        {
+            var mappings = _auctionMinMaxTargetPriceMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventpricebidcolumns")
+        {
+            var mappings = _eventPriceBidColumnsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventfreezecurrency")
+        {
+            var mappings = _eventFreezeCurrencyMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventpublish")
+        {
+            var mappings = _eventPublishMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventsupplierpricebid")
+        {
+            var mappings = _eventSupplierPriceBidMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventsupplierlineitem")
+        {
+            var mappings = _eventSupplierLineItemMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "sourcelistmaster")
+        {
+            var mappings = _sourceListMasterMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "pricebidchargesmaster")
+        {
+            var mappings = _priceBidChargesMasterMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "poheader")
+        {
+            var mappings = _poHeaderMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "poline")
+        {
+            var mappings = _poLineMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierbankdetails")
+        {
+            var mappings = _supplierBankDetailsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "suppliereventpricebidcolumns")
+        {
+            var mappings = _supplierEventPriceBidColumnsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierpricebidlotcharges")
+        {
+            var mappings = _supplierPriceBidLotChargesMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierpricebidlotprice")
+        {
+            var mappings = _supplierPriceBidLotPriceMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierpricebiddocument")
+        {
+            var mappings = _supplierPriceBidDocumentMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierpriceboqitems")
+        {
+            var mappings = _supplierPriceBoqItemsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierpricebidnonpricing")
+        {
+            var mappings = _supplierPriceBidNonPricingMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventcommunicationsender")
+        {
+            var mappings = _eventCommunicationSenderMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventcommunicationreceiver")
+        {
+            var mappings = _eventCommunicationReceiverMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "eventcommunicationattachment")
+        {
+            var mappings = _eventCommunicationAttachmentMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "nfaclarification")
+        {
+            var mappings = _nfaClarificationMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "nfaboqitems")
+        {
+            var mappings = _nfaBoqItemsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "nfaattachments")
+        {
+            var mappings = _nfaAttachmentsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "nfapocondition")
+        {
+            var mappings = _nfaPoConditionMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "nfaworkflow")
+        {
+            var mappings = _nfaWorkflowMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -897,6 +1155,118 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "arcapprovalauthority")
             {
                 recordCount = await _arcApprovalAuthorityMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventschedule")
+            {
+                recordCount = await _eventScheduleMigrationService.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventschedulehistory")
+            {
+                recordCount = await _eventScheduleHistoryMigrationService.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "erpcurrencyexchangerate")
+            {
+                recordCount = await _erpCurrencyExchangeRateMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "auctionminmaxtargetprice")
+            {
+                recordCount = await _auctionMinMaxTargetPriceMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventpricebidcolumns")
+            {
+                recordCount = await _eventPriceBidColumnsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventfreezecurrency")
+            {
+                recordCount = await _eventFreezeCurrencyMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventpublish")
+            {
+                recordCount = await _eventPublishMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventsupplierpricebid")
+            {
+                recordCount = await _eventSupplierPriceBidMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventsupplierlineitem")
+            {
+                recordCount = await _eventSupplierLineItemMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "sourcelistmaster")
+            {
+                recordCount = await _sourceListMasterMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "pricebidchargesmaster")
+            {
+                recordCount = await _priceBidChargesMasterMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "poheader")
+            {
+                recordCount = await _poHeaderMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "poline")
+            {
+                recordCount = await _poLineMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierbankdetails")
+            {
+                recordCount = await _supplierBankDetailsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "suppliereventpricebidcolumns")
+            {
+                recordCount = await _supplierEventPriceBidColumnsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierpricebidlotcharges")
+            {
+                recordCount = await _supplierPriceBidLotChargesMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierpricebidlotprice")
+            {
+                recordCount = await _supplierPriceBidLotPriceMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierpricebiddocument")
+            {
+                recordCount = await _supplierPriceBidDocumentMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierpriceboqitems")
+            {
+                recordCount = await _supplierPriceBoqItemsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierpricebidnonpricing")
+            {
+                recordCount = await _supplierPriceBidNonPricingMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventcommunicationsender")
+            {
+                recordCount = await _eventCommunicationSenderMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventcommunicationreceiver")
+            {
+                recordCount = await _eventCommunicationReceiverMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "eventcommunicationattachment")
+            {
+                recordCount = await _eventCommunicationAttachmentMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "nfaclarification")
+            {
+                recordCount = await _nfaClarificationMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "nfaboqitems")
+            {
+                recordCount = await _nfaBoqItemsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "nfaattachments")
+            {
+                recordCount = await _nfaAttachmentsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "nfapocondition")
+            {
+                recordCount = await _nfaPoConditionMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "nfaworkflow")
+            {
+                recordCount = await _nfaWorkflowMigration.MigrateAsync();
             }
             else
             {
@@ -1502,6 +1872,396 @@ public class MigrationController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred during event_setting migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("erp-currency-exchange-rate/migrate")]
+    public async Task<IActionResult> MigrateErpCurrencyExchangeRate()
+    {
+        try
+        {
+            var migratedCount = await _erpCurrencyExchangeRateMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} erp_currency_exchange_rate records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during erp_currency_exchange_rate migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("auction-min-max-target-price/migrate")]
+    public async Task<IActionResult> MigrateAuctionMinMaxTargetPrice()
+    {
+        try
+        {
+            var migratedCount = await _auctionMinMaxTargetPriceMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} auction_min_max_target_price records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during auction_min_max_target_price migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-price-bid-columns/migrate")]
+    public async Task<IActionResult> MigrateEventPriceBidColumns()
+    {
+        try
+        {
+            var migratedCount = await _eventPriceBidColumnsMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_price_bid_columns source records (multiple rows generated)." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_price_bid_columns migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-freeze-currency/migrate")]
+    public async Task<IActionResult> MigrateEventFreezeCurrency()
+    {
+        try
+        {
+            var migratedCount = await _eventFreezeCurrencyMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_freeze_currency records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_freeze_currency migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-publish/migrate")]
+    public async Task<IActionResult> MigrateEventPublish()
+    {
+        try
+        {
+            var migratedCount = await _eventPublishMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_publish records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_publish migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-supplier-price-bid/migrate")]
+    public async Task<IActionResult> MigrateEventSupplierPriceBid()
+    {
+        try
+        {
+            var migratedCount = await _eventSupplierPriceBidMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_supplier_price_bid records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_supplier_price_bid migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-supplier-line-item/migrate")]
+    public async Task<IActionResult> MigrateEventSupplierLineItem()
+    {
+        try
+        {
+            var migratedCount = await _eventSupplierLineItemMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_supplier_line_item records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_supplier_line_item migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("sourcelist-master/migrate")]
+    public async Task<IActionResult> MigrateSourceListMaster()
+    {
+        try
+        {
+            var migratedCount = await _sourceListMasterMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} sourcelist_master records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during sourcelist_master migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("price-bid-charges-master/migrate")]
+    public async Task<IActionResult> MigratePriceBidChargesMaster()
+    {
+        try
+        {
+            var migratedCount = await _priceBidChargesMasterMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} price_bid_charges_master records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during price_bid_charges_master migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("po-header/migrate")]
+    public async Task<IActionResult> MigratePoHeader()
+    {
+        try
+        {
+            var migratedCount = await _poHeaderMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} po_header records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during po_header migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("po-line/migrate")]
+    public async Task<IActionResult> MigratePoLine()
+    {
+        try
+        {
+            var migratedCount = await _poLineMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} po_line records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during po_line migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("supplier-bank-details/migrate")]
+    public async Task<IActionResult> MigrateSupplierBankDetails()
+    {
+        try
+        {
+            var migratedCount = await _supplierBankDetailsMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} supplier_bank_deails records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during supplier_bank_details migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("supplier-event-price-bid-columns/migrate")]
+    public async Task<IActionResult> MigrateSupplierEventPriceBidColumns()
+    {
+        try
+        {
+            var migratedCount = await _supplierEventPriceBidColumnsMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} supplier_event_price_bid_columns records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during supplier_event_price_bid_columns migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("supplier-price-bid-lot-charges/migrate")]
+    public async Task<IActionResult> MigrateSupplierPriceBidLotCharges()
+    {
+        try
+        {
+            var migratedCount = await _supplierPriceBidLotChargesMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} supplier_price_bid_lot_charges records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during supplier_price_bid_lot_charges migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("supplier-price-bid-lot-price/migrate")]
+    public async Task<IActionResult> MigrateSupplierPriceBidLotPrice()
+    {
+        try
+        {
+            var migratedCount = await _supplierPriceBidLotPriceMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} supplier_price_bid_lot_price records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during supplier_price_bid_lot_price migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("supplier-price-bid-document/migrate")]
+    public async Task<IActionResult> MigrateSupplierPriceBidDocument()
+    {
+        try
+        {
+            var migratedCount = await _supplierPriceBidDocumentMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} supplier_price_bid_document records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during supplier_price_bid_document migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("supplier-price-boq-items/migrate")]
+    public async Task<IActionResult> MigrateSupplierPriceBoqItems()
+    {
+        try
+        {
+            var migratedCount = await _supplierPriceBoqItemsMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} supplier_price_boq_items records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during supplier_price_boq_items migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("supplier-price-bid-non-pricing/migrate")]
+    public async Task<IActionResult> MigrateSupplierPriceBidNonPricing()
+    {
+        try
+        {
+            var migratedCount = await _supplierPriceBidNonPricingMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} supplier_price_bid_non_pricing records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during supplier_price_bid_non_pricing migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-communication-sender/migrate")]
+    public async Task<IActionResult> MigrateEventCommunicationSender()
+    {
+        try
+        {
+            var migratedCount = await _eventCommunicationSenderMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_communication_sender records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_communication_sender migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-communication-receiver/migrate")]
+    public async Task<IActionResult> MigrateEventCommunicationReceiver()
+    {
+        try
+        {
+            var migratedCount = await _eventCommunicationReceiverMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_communication_receiver records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_communication_receiver migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("event-communication-attachment/migrate")]
+    public async Task<IActionResult> MigrateEventCommunicationAttachment()
+    {
+        try
+        {
+            var migratedCount = await _eventCommunicationAttachmentMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} event_communication_attachment records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during event_communication_attachment migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("nfa-clarification/migrate")]
+    public async Task<IActionResult> MigrateNfaClarification()
+    {
+        try
+        {
+            var migratedCount = await _nfaClarificationMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} nfa_clarification records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during nfa_clarification migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("nfa-boq-items/migrate")]
+    public async Task<IActionResult> MigrateNfaBoqItems()
+    {
+        try
+        {
+            var migratedCount = await _nfaBoqItemsMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} nfa_boq_items records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during nfa_boq_items migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("nfa-attachments/migrate")]
+    public async Task<IActionResult> MigrateNfaAttachments()
+    {
+        try
+        {
+            var migratedCount = await _nfaAttachmentsMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} nfa_attachments records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during nfa_attachments migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("nfa-po-condition/migrate")]
+    public async Task<IActionResult> MigrateNfaPoCondition()
+    {
+        try
+        {
+            var migratedCount = await _nfaPoConditionMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} nfa_po_condition records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during nfa_po_condition migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("nfa-workflow/migrate")]
+    public async Task<IActionResult> MigrateNfaWorkflow()
+    {
+        try
+        {
+            var migratedCount = await _nfaWorkflowMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} nfa_workflow records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during nfa_workflow migration.");
             return StatusCode(500, new { Error = "An error occurred during migration." });
         }
     }
