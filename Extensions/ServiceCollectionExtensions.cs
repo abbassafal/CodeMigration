@@ -46,6 +46,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<PoLineMigration>();
         services.AddTransient<SupplierBankDetailsMigration>();
         services.AddTransient<SupplierEventPriceBidColumnsMigration>();
+        services.AddTransient<SupplierPriceBidLotChargesMigration>();
+        services.AddTransient<SupplierPriceBidLotPriceMigration>();
+        services.AddTransient<SupplierPriceBidDocumentMigration>();
 
         return services;
     }

@@ -51,6 +51,9 @@ public class MigrationController : Controller
     private readonly PoLineMigration _poLineMigration;
     private readonly SupplierBankDetailsMigration _supplierBankDetailsMigration;
     private readonly SupplierEventPriceBidColumnsMigration _supplierEventPriceBidColumnsMigration;
+    private readonly SupplierPriceBidLotChargesMigration _supplierPriceBidLotChargesMigration;
+    private readonly SupplierPriceBidLotPriceMigration _supplierPriceBidLotPriceMigration;
+    private readonly SupplierPriceBidDocumentMigration _supplierPriceBidDocumentMigration;
     private readonly ILogger<MigrationController> _logger;
 
 
@@ -95,6 +98,9 @@ public class MigrationController : Controller
         PoLineMigration poLineMigration,
         SupplierBankDetailsMigration supplierBankDetailsMigration,
         SupplierEventPriceBidColumnsMigration supplierEventPriceBidColumnsMigration,
+        SupplierPriceBidLotChargesMigration supplierPriceBidLotChargesMigration,
+        SupplierPriceBidLotPriceMigration supplierPriceBidLotPriceMigration,
+        SupplierPriceBidDocumentMigration supplierPriceBidDocumentMigration,
         ILogger<MigrationController> logger)
     {
         _uomMigration = uomMigration;
@@ -137,6 +143,9 @@ public class MigrationController : Controller
         _poLineMigration = poLineMigration;
         _supplierBankDetailsMigration = supplierBankDetailsMigration;
         _supplierEventPriceBidColumnsMigration = supplierEventPriceBidColumnsMigration;
+        _supplierPriceBidLotChargesMigration = supplierPriceBidLotChargesMigration;
+        _supplierPriceBidLotPriceMigration = supplierPriceBidLotPriceMigration;
+        _supplierPriceBidDocumentMigration = supplierPriceBidDocumentMigration;
         _logger = logger;
     }
 
@@ -189,6 +198,9 @@ public class MigrationController : Controller
             new { name = "poline", description = "TBL_PO_Sub to po_line" },
             new { name = "supplierbankdetails", description = "tbl_VendorBankDetail to supplier_bank_deails" },
             new { name = "suppliereventpricebidcolumns", description = "TBL_PB_SUPPLIER to supplier_event_price_bid_columns (HEADER unpivot)" },
+            new { name = "supplierpricebidlotcharges", description = "TBL_PB_SUPPLIEROTHERCHARGES to supplier_price_bid_lot_charges" },
+            new { name = "supplierpricebidlotprice", description = "TBL_PB_SUPPLIERLotPrice to supplier_price_bid_lot_price" },
+            new { name = "supplierpricebiddocument", description = "TBL_PB_SUPPLIER_ATTACHMENT to supplier_price_bid_document" },
         };
         return Json(tables);
     }
@@ -384,6 +396,21 @@ public class MigrationController : Controller
         else if (table.ToLower() == "suppliereventpricebidcolumns")
         {
             var mappings = _supplierEventPriceBidColumnsMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierpricebidlotcharges")
+        {
+            var mappings = _supplierPriceBidLotChargesMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierpricebidlotprice")
+        {
+            var mappings = _supplierPriceBidLotPriceMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "supplierpricebiddocument")
+        {
+            var mappings = _supplierPriceBidDocumentMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -608,6 +635,18 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "suppliereventpricebidcolumns")
             {
                 recordCount = await _supplierEventPriceBidColumnsMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierpricebidlotcharges")
+            {
+                recordCount = await _supplierPriceBidLotChargesMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierpricebidlotprice")
+            {
+                recordCount = await _supplierPriceBidLotPriceMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "supplierpricebiddocument")
+            {
+                recordCount = await _supplierPriceBidDocumentMigration.MigrateAsync();
             }
             else
             {
@@ -1392,6 +1431,21 @@ public class MigrationController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred during supplier_event_price_bid_columns migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("supplier-price-bid-lot-charges/migrate")]
+    public async Task<IActionResult> MigrateSupplierPriceBidLotCharges()
+    {
+        try
+        {
+            var migratedCount = await _supplierPriceBidLotChargesMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} supplier_price_bid_lot_charges records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during supplier_price_bid_lot_charges migration.");
             return StatusCode(500, new { Error = "An error occurred during migration." });
         }
     }
