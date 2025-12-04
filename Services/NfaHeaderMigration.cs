@@ -19,75 +19,75 @@ public class NfaHeaderMigration : MigrationService
 
     protected override string SelectQuery => @"
         SELECT
-            AWARDEVENTMAINID,
-            AwardNo,
-            AwardStatus,
-            EventId,
-            VendorId,
-            TotalLotCharges,
-            TotalCSValue,
-            TotalGSTAmount,
-            TotalLineOtherCharges,
-            TotalDiscount,
-            GrandDiscountPer,
-            ItemTotal,
-            PaymentTermsId,
-            IncotermsId,
-            POType,
-            PONo,
-            POHeaderText,
-            PurchasingOrgId,
-            PurchasingGroupId,
-            PaymentTermsRemarks,
-            IncotermsRemarks,
-            SONo,
-            OrgVendorId,
-            IsSilverAnglePO,
-            AWARDEVENTMAINREFID,
-            SummaryNote,
-            ClosingNegotiationNote,
-            ARCMainId,
-            PRtoARCPOMAINId,
-            HeaderNote,
-            IsNFAChecked,
-            AttachmentPath,
-            AttachmentName,
-            IsStandAlone,
-            Purpose,
-            ClientSAPId,
-            PlantId,
-            TechnicallyAppoved,
-            CommerclalTC,
-            Meetingdeliverytimelineexpectation,
-            Meetingqualityrequirement,
-            PurchaseordershouldbeallottedtoL1supplier,
-            TechnicallyAppovedJustification,
-            CommerclalTCJustification,
-            MeetingdeliverytimelineexpectationJustification,
-            MeetingqualityrequirementJustification,
-            PurchaseordershouldbeallottedtoL1supplierJustification,
-            StandAloneBriefNote,
-            AdditionalDocument,
-            SALES_PERSON,
-            TELEPHONE,
-            YOUR_REFERENCE,
-            OUR_REFERENCE,
+            TBL_AWARDEVENTMAIN.AWARDEVENTMAINID,
+            TBL_AWARDEVENTMAIN.AwardNo,
+            TBL_AWARDEVENTMAIN.AwardStatus,
+            TBL_AWARDEVENTMAIN.EventId,
+            TBL_AWARDEVENTMAIN.VendorId,
+            TBL_AWARDEVENTMAIN.TotalLotCharges,
+            TBL_AWARDEVENTMAIN.TotalCSValue,
+            TBL_AWARDEVENTMAIN.TotalGSTAmount,
+            TBL_AWARDEVENTMAIN.TotalLineOtherCharges,
+            TBL_AWARDEVENTMAIN.TotalDiscount,
+            TBL_AWARDEVENTMAIN.GrandDiscountPer,
+            TBL_AWARDEVENTMAIN.ItemTotal,
+            TBL_AWARDEVENTMAIN.PaymentTermsId,
+            TBL_AWARDEVENTMAIN.IncotermsId,
+            TBL_AWARDEVENTMAIN.POType,
+            TBL_AWARDEVENTMAIN.PONo,
+            TBL_AWARDEVENTMAIN.POHeaderText,
+            TBL_AWARDEVENTMAIN.PurchasingOrgId,
+            TBL_AWARDEVENTMAIN.PurchasingGroupId,
+            TBL_AWARDEVENTMAIN.PaymentTermsRemarks,
+            TBL_AWARDEVENTMAIN.IncotermsRemarks,
+            TBL_AWARDEVENTMAIN.SONo,
+            TBL_AWARDEVENTMAIN.OrgVendorId,
+            TBL_AWARDEVENTMAIN.IsSilverAnglePO,
+            TBL_AWARDEVENTMAIN.AWARDEVENTMAINREFID,
+            TBL_AWARDEVENTMAIN.SummaryNote,
+            TBL_AWARDEVENTMAIN.ClosingNegotiationNote,
+            TBL_AWARDEVENTMAIN.ARCMainId,
+            TBL_AWARDEVENTMAIN.PRtoARCPOMAINId,
+            TBL_AWARDEVENTMAIN.HeaderNote,
+            TBL_AWARDEVENTMAIN.IsNFAChecked,
+            TBL_AWARDEVENTMAIN.AttachmentPath,
+            TBL_AWARDEVENTMAIN.AttachmentName,
+            TBL_AWARDEVENTMAIN.IsStandAlone,
+            TBL_AWARDEVENTMAIN.Purpose,
+            TBL_AWARDEVENTMAIN.ClientSAPId,
+            TBL_AWARDEVENTMAIN.PlantId,
+            TBL_AWARDEVENTMAIN.TechnicallyAppoved,
+            TBL_AWARDEVENTMAIN.CommerclalTC,
+            TBL_AWARDEVENTMAIN.Meetingdeliverytimelineexpectation,
+            TBL_AWARDEVENTMAIN.Meetingqualityrequirement,
+            TBL_AWARDEVENTMAIN.PurchaseordershouldbeallottedtoL1supplier,
+            TBL_AWARDEVENTMAIN.TechnicallyAppovedJustification,
+            TBL_AWARDEVENTMAIN.CommerclalTCJustification,
+            TBL_AWARDEVENTMAIN.MeetingdeliverytimelineexpectationJustification,
+            TBL_AWARDEVENTMAIN.MeetingqualityrequirementJustification,
+            TBL_AWARDEVENTMAIN.PurchaseordershouldbeallottedtoL1supplierJustification,
+            TBL_AWARDEVENTMAIN.StandAloneBriefNote,
+            TBL_AWARDEVENTMAIN.AdditionalDocument,
+            TBL_AWARDEVENTMAIN.SALES_PERSON,
+            TBL_AWARDEVENTMAIN.TELEPHONE,
+            TBL_AWARDEVENTMAIN.YOUR_REFERENCE,
+            TBL_AWARDEVENTMAIN.OUR_REFERENCE,
             TBL_AWARDEVENTMAIN.CurrencyId,
             TBL_EVENTSELECTEDUSER.VendorCurrencyId,
-            TypeofCategory,
-            POCreatedDate,
-            ME2mScreenshotName,
-            ME2mScreenshotPath,
-            OEMVendorId,
-            CreatedBy,
-            CreatedDate,
-            BuyerRemarks,
-            ApprovalStatus
+            TBL_AWARDEVENTMAIN.TypeofCategory,
+            TBL_AWARDEVENTMAIN.POCreatedDate,
+            TBL_AWARDEVENTMAIN.ME2mScreenshotName,
+            TBL_AWARDEVENTMAIN.ME2mScreenshotPath,
+            TBL_AWARDEVENTMAIN.OEMVendorId,
+            TBL_AWARDEVENTMAIN.CreatedBy,
+            TBL_AWARDEVENTMAIN.CreatedDate,
+            TBL_AWARDEVENTMAIN.BuyerRemarks,
+            TBL_AWARDEVENTMAIN.ApprovalStatus
         FROM TBL_AWARDEVENTMAIN
         LEFT JOIN TBL_EVENTSELECTEDUSER ON TBL_EVENTSELECTEDUSER.EVENTID = TBL_AWARDEVENTMAIN.EventId 
             AND TBL_EVENTSELECTEDUSER.USERID = TBL_AWARDEVENTMAIN.VendorId 
             AND TBL_EVENTSELECTEDUSER.UserType = 'Vendor'
-        ORDER BY AWARDEVENTMAINID";
+        ORDER BY TBL_AWARDEVENTMAIN.AWARDEVENTMAINID";
 
     protected override string InsertQuery => @"
         INSERT INTO nfa_header (
@@ -492,6 +492,24 @@ public class NfaHeaderMigration : MigrationService
                     continue;
                 }
 
+                // Skip if supplier_id (VendorId) is NULL or 0
+                var vendorId = reader["VendorId"];
+                if (vendorId == DBNull.Value || Convert.ToInt32(vendorId) == 0)
+                {
+                    skippedRecords++;
+                    _logger.LogWarning($"Skipping record {awardEventMainIdValue} - VendorId is NULL or 0");
+                    continue;
+                }
+
+                // Skip if company_id (ClientSAPId) is NULL or 0
+                var clientSAPId = reader["ClientSAPId"];
+                if (clientSAPId == DBNull.Value || Convert.ToInt32(clientSAPId) == 0)
+                {
+                    skippedRecords++;
+                    _logger.LogWarning($"Skipping record {awardEventMainIdValue} - ClientSAPId is NULL or 0");
+                    continue;
+                }
+
                 // Get lookup values
                 var paymentTermId = reader["PaymentTermsId"];
                 string? paymentTermCode = null;
@@ -553,7 +571,7 @@ public class NfaHeaderMigration : MigrationService
                     ["supplier_id"] = reader["VendorId"] ?? DBNull.Value,
                     ["lot_total"] = reader["TotalLotCharges"] ?? DBNull.Value,
                     ["total_before_tax"] = calculatedTotalBeforeTax,
-                    ["total_tax_value"] = reader["TotalGSTAmount"] ?? DBNull.Value,
+                    ["total_tax_value"] = totalGSTAmount,
                     ["total_after_tax"] = calculatedTotalAfterTax,
                     ["item_total"] = calculatedItemTotal,
                     ["payment_term_id"] = paymentTermId ?? DBNull.Value,
@@ -578,7 +596,7 @@ public class NfaHeaderMigration : MigrationService
                     ["nfa_for_review"] = reader["IsNFAChecked"] ?? DBNull.Value,
                     ["auction_chart_file_path"] = reader["AttachmentPath"] ?? DBNull.Value,
                     ["auction_chart_file_name"] = reader["AttachmentName"] ?? DBNull.Value,
-                    ["standalone_nfa_flag"] = reader["IsStandAlone"] ?? DBNull.Value,
+                    ["standalone_nfa_flag"] = reader["IsStandAlone"] != DBNull.Value ? Convert.ToBoolean(reader["IsStandAlone"]) : false,
                     ["company_id"] = reader["ClientSAPId"] ?? DBNull.Value,
                     ["plant_id"] = plantId ?? DBNull.Value,
                     ["plant_code"] = plantCode ?? (object)DBNull.Value,

@@ -72,6 +72,8 @@ public class MigrationController : Controller
     private readonly SupplierTermDeviationsMigration _supplierTermDeviationsMigration;
     private readonly SupplierTechnicalParameterMigration _supplierTechnicalParameterMigration;
     private readonly NfaHeaderMigration _nfaHeaderMigration;
+    private readonly NfaLineMigration _nfaLineMigration;
+    private readonly NfaLotChargesMigration _nfaLotChargesMigration;
     private readonly IConfiguration _configuration;
     private readonly EventSettingMigrationService _eventSettingMigrationService;
     private readonly ILogger<MigrationController> _logger;
@@ -127,6 +129,8 @@ public class MigrationController : Controller
         SupplierTermDeviationsMigration supplierTermDeviationsMigration,
         SupplierTechnicalParameterMigration supplierTechnicalParameterMigration,
         NfaHeaderMigration nfaHeaderMigration,
+        NfaLineMigration nfaLineMigration,
+        NfaLotChargesMigration nfaLotChargesMigration,
         TaxCodeMasterMigration taxCodeMasterMigration,
         CompanyMasterMigration companyMasterMigration,
         PurchaseOrganizationMasterMigration purchaseOrganizationMigration,
@@ -191,6 +195,8 @@ public class MigrationController : Controller
         _supplierTermDeviationsMigration = supplierTermDeviationsMigration;
         _supplierTechnicalParameterMigration = supplierTechnicalParameterMigration;
         _nfaHeaderMigration = nfaHeaderMigration;
+        _nfaLineMigration = nfaLineMigration;
+        _nfaLotChargesMigration = nfaLotChargesMigration;
         _taxCodeMasterMigration = taxCodeMasterMigration;
         _companyMasterMigration = companyMasterMigration;
         _purchaseOrganizationMigration = purchaseOrganizationMigration;
@@ -257,6 +263,8 @@ public class MigrationController : Controller
             new {name = "suppliertermdeviations", description = "TBL_VENDORDEVIATIONTRN to supplier_term_deviations" },
             new {name = "suppliertechnicalparameter", description = "TBL_VendorTechItemTerm to supplier_technical_parameter" },
             new {name = "nfaheader", description = "TBL_AWARDEVENTMAIN to nfa_header" },
+            new {name = "nfaline", description = "TBL_AWARDEVENTITEM to nfa_line" },
+            new {name = "nfalotcharges", description = "TBL_AWARDEVENTLOTCHARGES to nfa_lot_charges" },
             new {name = "arcapprovalauthority", description = "TBL_ARCApprovalAuthority to arc_workflow" },
             new { name = "valuationtype", description = "TBL_ValuationTypeMaster to valuation_type_master" },
             new { name = "typeofcategory", description = "TBL_TypeOfCategoryMaster to type_of_category_master" },
@@ -564,6 +572,16 @@ public class MigrationController : Controller
             var mappings = _nfaHeaderMigration.GetMappings();
             return Json(mappings);
         }
+        else if (table.ToLower() == "nfaline")
+        {
+            var mappings = _nfaLineMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "nfalotcharges")
+        {
+            var mappings = _nfaLotChargesMigration.GetMappings();
+            return Json(mappings);
+        }
         else if (table.ToLower() == "arcapprovalauthority")
         {
             var mappings = _arcApprovalAuthorityMigration.GetMappings();
@@ -863,6 +881,14 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "nfaheader")
             {
                 recordCount = await _nfaHeaderMigration.MigrateAsync(useTransaction: false);
+            }
+            else if (request.Table.ToLower() == "nfaline")
+            {
+                recordCount = await _nfaLineMigration.MigrateAsync(useTransaction: false);
+            }
+            else if (request.Table.ToLower() == "nfalotcharges")
+            {
+                recordCount = await _nfaLotChargesMigration.MigrateAsync(useTransaction: false);
             }
             else if (request.Table.ToLower() == "usercompanymaster")
             {
