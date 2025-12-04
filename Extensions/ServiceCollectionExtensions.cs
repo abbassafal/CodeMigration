@@ -58,6 +58,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<NfaBoqItemsMigration>();
         services.AddTransient<NfaAttachmentsMigration>();
         services.AddTransient<NfaPoConditionMigration>();
+        services.AddTransient<NfaWorkflowMigration>();
 
         return services;
     }

@@ -63,6 +63,7 @@ public class MigrationController : Controller
     private readonly NfaBoqItemsMigration _nfaBoqItemsMigration;
     private readonly NfaAttachmentsMigration _nfaAttachmentsMigration;
     private readonly NfaPoConditionMigration _nfaPoConditionMigration;
+    private readonly NfaWorkflowMigration _nfaWorkflowMigration;
     private readonly ILogger<MigrationController> _logger;
 
 
@@ -119,6 +120,7 @@ public class MigrationController : Controller
         NfaBoqItemsMigration nfaBoqItemsMigration,
         NfaAttachmentsMigration nfaAttachmentsMigration,
         NfaPoConditionMigration nfaPoConditionMigration,
+        NfaWorkflowMigration nfaWorkflowMigration,
         ILogger<MigrationController> logger)
     {
         _uomMigration = uomMigration;
@@ -173,6 +175,7 @@ public class MigrationController : Controller
         _nfaBoqItemsMigration = nfaBoqItemsMigration;
         _nfaAttachmentsMigration = nfaAttachmentsMigration;
         _nfaPoConditionMigration = nfaPoConditionMigration;
+        _nfaWorkflowMigration = nfaWorkflowMigration;
         _logger = logger;
     }
 
@@ -237,6 +240,7 @@ public class MigrationController : Controller
             new { name = "nfaboqitems", description = "Tbl_AwardEventItemSub to nfa_boq_items (multi-table join)" },
             new { name = "nfaattachments", description = "TBL_QCSPOMailAttachmentFile + TBL_STANDALONENFAATTACHMENT to nfa_attachments" },
             new { name = "nfapocondition", description = "TBL_AwardEventPoCondition to nfa_po_condition" },
+            new { name = "nfaworkflow", description = "TBL_StandAloneQCSApprovalAuthority to nfa_workflow" },
         };
         return Json(tables);
     }
@@ -492,6 +496,11 @@ public class MigrationController : Controller
         else if (table.ToLower() == "nfapocondition")
         {
             var mappings = _nfaPoConditionMigration.GetMappings();
+            return Json(mappings);
+        }
+        else if (table.ToLower() == "nfaworkflow")
+        {
+            var mappings = _nfaWorkflowMigration.GetMappings();
             return Json(mappings);
         }
         return Json(new List<object>());
@@ -764,6 +773,10 @@ public class MigrationController : Controller
             else if (request.Table.ToLower() == "nfapocondition")
             {
                 recordCount = await _nfaPoConditionMigration.MigrateAsync();
+            }
+            else if (request.Table.ToLower() == "nfaworkflow")
+            {
+                recordCount = await _nfaWorkflowMigration.MigrateAsync();
             }
             else
             {
@@ -1728,6 +1741,21 @@ public class MigrationController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error occurred during nfa_po_condition migration.");
+            return StatusCode(500, new { Error = "An error occurred during migration." });
+        }
+    }
+
+    [HttpPost("nfa-workflow/migrate")]
+    public async Task<IActionResult> MigrateNfaWorkflow()
+    {
+        try
+        {
+            var migratedCount = await _nfaWorkflowMigration.MigrateAsync();
+            return Ok(new { Message = $"Successfully migrated {migratedCount} nfa_workflow records." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred during nfa_workflow migration.");
             return StatusCode(500, new { Error = "An error occurred during migration." });
         }
     }
