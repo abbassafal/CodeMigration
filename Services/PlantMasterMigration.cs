@@ -7,9 +7,9 @@ using Npgsql;
 
 public class PlantMasterMigration : MigrationService
 {
-    protected override string SelectQuery => "SELECT PlantId, ClientSAPId, PlantCode, PlantName, CompanyCode FROM TBL_PlantMaster";
-    protected override string InsertQuery => @"INSERT INTO plant_master (plant_id, company_id, plant_code, plant_name, plant_company_code, created_by, created_date, modified_by, modified_date, is_deleted, deleted_by, deleted_date) 
-                                             VALUES (@plant_id, @company_id, @plant_code, @plant_name, @plant_company_code, @created_by, @created_date, @modified_by, @modified_date, @is_deleted, @deleted_by, @deleted_date)";
+    protected override string SelectQuery => "SELECT PlantId, ClientSAPId, PlantCode, PlantName, CompanyCode, Location FROM TBL_PlantMaster";
+    protected override string InsertQuery => @"INSERT INTO plant_master (plant_id, company_id, plant_code, plant_name, plant_company_code, plant_location, created_by, created_date, modified_by, modified_date, is_deleted, deleted_by, deleted_date) 
+                                             VALUES (@plant_id, @company_id, @plant_code, @plant_name, @plant_company_code, @plant_location, @created_by, @created_date, @modified_by, @modified_date, @is_deleted, @deleted_by, @deleted_date)";
 
     public PlantMasterMigration(IConfiguration configuration) : base(configuration) { }
 
@@ -22,6 +22,7 @@ public class PlantMasterMigration : MigrationService
             "Direct",           // plant_code
             "Direct",           // plant_name
             "Direct",           // plant_company_code
+            "Direct",           // plant_location
             "Default: 0",       // created_by
             "Default: Now",     // created_date
             "Default: null",    // modified_by
@@ -57,6 +58,7 @@ public class PlantMasterMigration : MigrationService
             pgCmd.Parameters.AddWithValue("@plant_code", reader["PlantCode"]);
             pgCmd.Parameters.AddWithValue("@plant_name", reader["PlantName"]);
             pgCmd.Parameters.AddWithValue("@plant_company_code", reader["CompanyCode"]);
+            pgCmd.Parameters.AddWithValue("@plant_location", reader.IsDBNull(reader.GetOrdinal("Location")) ? (object)DBNull.Value : reader["Location"]);
             pgCmd.Parameters.AddWithValue("@created_by", 0);
             pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow);
             pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value);
