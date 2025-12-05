@@ -187,6 +187,10 @@ ON CONFLICT (event_item_id) DO UPDATE SET
         var validEventIds = await LoadValidEventIdsAsync(pgConn, transaction);
         _logger.LogInformation($"Loaded {validEventIds.Count} valid event IDs from event_master.");
 
+        // Load ERP PR lines data for material lookups
+        var erpPrLinesData = await LoadErpPrLinesDataAsync(pgConn, transaction);
+        _logger.LogInformation($"Loaded {erpPrLinesData.Count} ERP PR lines for lookup.");
+
         // ...existing code for reading from TBL_PB_BUYER...
         using var selectCmd = new SqlCommand(SelectQuery, sqlConn);
         selectCmd.CommandTimeout = 300;
@@ -251,20 +255,39 @@ ON CONFLICT (event_item_id) DO UPDATE SET
                 continue;
             }
 
+            // Populate material fields from erp_pr_lines lookup if available
+            ErpPrLineData? prLine = null;
+            if (prTransId != DBNull.Value)
+            {
+                int prIdVal = Convert.ToInt32(prTransId);
+                if (erpPrLinesData.ContainsKey(prIdVal))
+                {
+                    prLine = erpPrLinesData[prIdVal];
+                }
+            }
+
+            var materialCode = prLine?.MaterialCode;
+            var materialShortText = prLine?.MaterialShortText;
+            var materialItemText = prLine?.MaterialItemText;
+            var materialPoDescription = prLine?.MaterialPoDescription;
+
+            // Determine item_type: Material if material_code exists, otherwise Service
+            string itemTypeValue = !string.IsNullOrEmpty(materialCode) ? "Material" : "Service";
+
             var record = new Dictionary<string, object>
             {
                 ["event_item_id"] = pbId,
                 ["event_id"] = eventId,
                 ["erp_pr_lines_id"] = prTransId,
-                ["material_code"] = DBNull.Value, // Not mapped here
-                ["material_short_text"] = DBNull.Value,
-                ["material_item_text"] = DBNull.Value,
-                ["material_po_description"] = DBNull.Value,
+                ["material_code"] = materialCode != null ? (object)materialCode : DBNull.Value,
+                ["material_short_text"] = materialShortText != null ? (object)materialShortText : DBNull.Value,
+                ["material_item_text"] = materialItemText != null ? (object)materialItemText : DBNull.Value,
+                ["material_po_description"] = materialPoDescription != null ? (object)materialPoDescription : DBNull.Value,
                 ["uom_id"] = uomId.HasValue ? (object)uomId.Value : DBNull.Value,
                 ["uom_code"] = uomCode != null ? (object)uomCode : DBNull.Value,
                 ["company_id"] = clientSapId,
                 ["qty"] = qty,
-                ["item_type"] = "text",
+                ["item_type"] = itemTypeValue,
                 ["created_by"] = DBNull.Value,
                 ["created_date"] = DBNull.Value,
                 ["modified_by"] = DBNull.Value,

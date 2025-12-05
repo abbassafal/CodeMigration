@@ -20,17 +20,17 @@ public class SupplierMasterMigration : MigrationService
             VendorCode,
             VendorName,
             VendorType,
-            Primary_Contact_Person,
+            Primary_Contact_Person AS ContPerson,
             PANNo,
             GSTNo,
             ZipCode,
             OfficeAddress,
-            Primary_Phone,
+            Primary_Phone AS OfficeTelephoneNumber,
             MobileTelephoneNumber,
-            Primary_Email,
+            Primary_Email AS OfficeEmail,
             OfficeCountryID,
             OfficeCity,
-            StateID,
+            StateID AS SAPRegionCode,
             ClientSAPId,
             VendorGroupId,
             StatusVendor
@@ -165,17 +165,17 @@ public class SupplierMasterMigration : MigrationService
             new { source = "VendorName", logic = "VendorName -> supplier_name (Direct)", target = "supplier_name" },
             // VendorType should map StatusVendor to supplier_type
             new { source = "StatusVendor", logic = "StatusVendor -> supplier_type (From StatusVendor)", target = "supplier_type" },
-            new { source = "Primary_Contact_Person", logic = "Primary_Contact_Person -> contact_name (Direct)", target = "contact_name" },
+            new { source = "ContPerson", logic = "ContPerson -> contact_name (Direct)", target = "contact_name" },
             new { source = "PANNo", logic = "PANNo -> pan_card_number (Direct)", target = "pan_card_number" },
             new { source = "GSTNo", logic = "GSTNo -> gst_number (Direct)", target = "gst_number" },
             new { source = "ZipCode", logic = "ZipCode -> zip_code (Direct)", target = "zip_code" },
             new { source = "OfficeAddress", logic = "OfficeAddress -> officeaddress (Direct)", target = "officeaddress" },
-            new { source = "Primary_Phone", logic = "Primary_Phone -> mobile_number1 (Direct)", target = "mobile_number1" },
+            new { source = "OfficeTelephoneNumber", logic = "OfficeTelephoneNumber -> mobile_number1 (Direct)", target = "mobile_number1" },
             new { source = "MobileTelephoneNumber", logic = "MobileTelephoneNumber -> mobile_number2 (Direct)", target = "mobile_number2" },
-            new { source = "Primary_Email", logic = "Primary_Email -> primary_email_id (Direct)", target = "primary_email_id" },
+            new { source = "OfficeEmail", logic = "OfficeEmail -> primary_email_id (Direct)", target = "primary_email_id" },
             new { source = "OfficeCountryID", logic = "OfficeCountryID -> office_country_id (Direct, defaults to 1 if NULL)", target = "office_country_id" },
             new { source = "OfficeCity", logic = "OfficeCity -> office_city (Direct)", target = "office_city" },
-            new { source = "StateID", logic = "StateID -> office_state (Convert to text)", target = "office_state" },
+            new { source = "SAPRegionCode", logic = "SAPRegionCode -> office_state (Convert to text)", target = "office_state" },
             new { source = "ClientSAPId", logic = "ClientSAPId -> company_id (FK to company_master, defaults to 1 if NULL)", target = "company_id" },
             new { source = "VendorGroupId", logic = "VendorGroupId -> supplier_group_id (FK to supplier_groupmaster)", target = "supplier_group_id" },
             // Status should always be 'Active' (Fixed Default)
@@ -349,17 +349,17 @@ public class SupplierMasterMigration : MigrationService
             var vendorName = reader.IsDBNull(reader.GetOrdinal("VendorName")) ? "" : reader["VendorName"].ToString();
             // VendorType should show StatusVendor value from MSSQL column
             var vendorType = reader.IsDBNull(reader.GetOrdinal("StatusVendor")) ? "" : reader["StatusVendor"].ToString();
-            var contactPerson = reader.IsDBNull(reader.GetOrdinal("Primary_Contact_Person")) ? "" : reader["Primary_Contact_Person"].ToString();
+            var contactPerson = reader.IsDBNull(reader.GetOrdinal("ContPerson")) ? "" : reader["ContPerson"].ToString();
             var panNo = reader.IsDBNull(reader.GetOrdinal("PANNo")) ? "" : reader["PANNo"].ToString();
             var gstNo = reader.IsDBNull(reader.GetOrdinal("GSTNo")) ? "" : reader["GSTNo"].ToString();
             var zipCode = reader.IsDBNull(reader.GetOrdinal("ZipCode")) ? "" : reader["ZipCode"].ToString();
             var officeAddress = reader.IsDBNull(reader.GetOrdinal("OfficeAddress")) ? "" : reader["OfficeAddress"].ToString();
-            var primaryPhone = reader.IsDBNull(reader.GetOrdinal("Primary_Phone")) ? "" : reader["Primary_Phone"].ToString();
+            var primaryPhone = reader.IsDBNull(reader.GetOrdinal("OfficeTelephoneNumber")) ? "" : reader["OfficeTelephoneNumber"].ToString();
             var mobilePhone = reader.IsDBNull(reader.GetOrdinal("MobileTelephoneNumber")) ? "" : reader["MobileTelephoneNumber"].ToString();
-            var primaryEmail = reader.IsDBNull(reader.GetOrdinal("Primary_Email")) ? "" : reader["Primary_Email"].ToString();
+            var primaryEmail = reader.IsDBNull(reader.GetOrdinal("OfficeEmail")) ? "" : reader["OfficeEmail"].ToString();
             var officeCountryId = reader.IsDBNull(reader.GetOrdinal("OfficeCountryID")) ? 1 : Convert.ToInt32(reader["OfficeCountryID"]); // Default to India (1)
             var officeCity = reader.IsDBNull(reader.GetOrdinal("OfficeCity")) ? "" : reader["OfficeCity"].ToString();
-            var stateId = reader.IsDBNull(reader.GetOrdinal("StateID")) ? "" : reader["StateID"].ToString();
+            var stateId = reader.IsDBNull(reader.GetOrdinal("SAPRegionCode")) ? "" : reader["SAPRegionCode"].ToString();
             var clientSapId = reader.IsDBNull(reader.GetOrdinal("ClientSAPId")) ? 1 : Convert.ToInt32(reader["ClientSAPId"]);
             if (clientSapId == 0)
             {

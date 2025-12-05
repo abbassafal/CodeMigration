@@ -73,6 +73,8 @@ SELECT
     t.RequestDate AS erp_change_on_date,
     t.DeliveryDate AS delivery_date,
     CASE WHEN t.IsClosed = 'X' THEN 1 ELSE 0 END AS is_closed,
+    t.itemBlocked,
+    CASE WHEN ISNULL(t.itemBlocked, '') = '' THEN 0 ELSE 1 END AS item_block,
     0 AS created_by,
     NULL AS created_date,
     0 AS modified_by,
@@ -95,7 +97,7 @@ INSERT INTO erp_pr_lines (
     qty, po_number, po_creation_date, po_qty, po_vendor_code, po_vendor_name, po_item_value, lpo_number, lpo_line_number, lpo_doc_type,
     lpo_creation_date, lpo_uom, lpo_unit_price, lpo_line_currency, lpo_vendor_code, lpo_vendor_name, lpo_date, lpo_qty,
     total_stock, cost_center, store_location, department, acct_assignment_cat, acct_assignment_cat_desc, wbs_element_code, wbs_element_name,
-    currency_code, tracking_number, erp_created_by, erp_request_by, erp_change_on_date, delivery_date, is_closed, created_by,
+    currency_code, tracking_number, erp_created_by, erp_request_by, erp_change_on_date, delivery_date, is_closed, item_block, created_by,
     created_date, modified_by, modified_date, is_deleted, deleted_by, deleted_date
 ) VALUES (
     @erp_pr_lines_id, @temp_pr, @user_id, @user_full_name, @pr_status, @pr_number, @pr_line, @header_text, @company_id, @company_code,
@@ -104,7 +106,7 @@ INSERT INTO erp_pr_lines (
     @qty, @po_number, @po_creation_date, @po_qty, @po_vendor_code, @po_vendor_name, @po_item_value, @lpo_number, @lpo_line_number, @lpo_doc_type,
     @lpo_creation_date, @lpo_uom, @lpo_unit_price, @lpo_line_currency, @lpo_vendor_code, @lpo_vendor_name, @lpo_date, @lpo_qty,
     @total_stock, @cost_center, @store_location, @department, @acct_assignment_cat, @acct_assignment_cat_desc, @wbs_element_code, @wbs_element_name,
-    @currency_code, @tracking_number, @erp_created_by, @erp_request_by, @erp_change_on_date, @delivery_date, @is_closed, @created_by,
+    @currency_code, @tracking_number, @erp_created_by, @erp_request_by, @erp_change_on_date, @delivery_date, @is_closed, @item_block, @created_by,
     @created_date, @modified_by, @modified_date, @is_deleted, @deleted_by, @deleted_date
 )";
 
@@ -187,6 +189,7 @@ INSERT INTO erp_pr_lines (
         "Direct", // erp_change_on_date
         "Direct", // delivery_date
         "Direct", // is_closed
+        "Conditional", // item_block
         "Direct", // created_by
         "Direct", // created_date
         "Direct", // modified_by
@@ -301,11 +304,12 @@ INSERT INTO erp_pr_lines (
                 ["erp_change_on_date"] = reader["erp_change_on_date"] ?? DBNull.Value,
                 ["delivery_date"] = reader["delivery_date"] ?? DBNull.Value,
                 ["is_closed"] = Convert.ToInt32(reader["is_closed"]) == 1,
+                ["item_block"] = Convert.ToInt32(reader["item_block"]) == 1,
                 ["created_by"] = reader["created_by"] ?? DBNull.Value,
                 ["created_date"] = reader["created_date"] ?? DBNull.Value,
                 ["modified_by"] = reader["modified_by"] ?? DBNull.Value,
                 ["modified_date"] = reader["modified_date"] ?? DBNull.Value,
-                ["is_deleted"] = Convert.ToInt32(reader["is_deleted"]) == 1,
+                ["is_deleted"] = Convert.ToInt32(reader["item_block"]) == 1,
                 ["deleted_by"] = reader["deleted_by"] ?? DBNull.Value,
                 ["deleted_date"] = reader["deleted_date"] ?? DBNull.Value
             };
@@ -347,7 +351,7 @@ INSERT INTO erp_pr_lines (
             "lpo_uom", "lpo_unit_price", "lpo_line_currency", "lpo_vendor_code", "lpo_vendor_name", "lpo_date", "lpo_qty", 
             "total_stock", "cost_center", "store_location", "department", "acct_assignment_cat", "acct_assignment_cat_desc", 
             "wbs_element_code", "wbs_element_name", "currency_code", "tracking_number", "erp_created_by", "erp_request_by", 
-            "erp_change_on_date", "delivery_date", "is_closed", "created_by", "created_date", "modified_by", "modified_date", 
+            "erp_change_on_date", "delivery_date", "is_closed", "item_block", "created_by", "created_date", "modified_by", "modified_date", 
             "is_deleted", "deleted_by", "deleted_date"
         };
         
