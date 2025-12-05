@@ -111,6 +111,8 @@ public class EventMasterMigration : MigrationService
         public DateTime? TechnicalApprovalApprovedDate { get; set; }
         public string? TechnicalApprovalStatus { get; set; }
         public int IsStandalone { get; set; }
+        public int? EnterBy { get; set; }
+        public DateTime? EnterDate { get; set; }
         // Event Setting fields
         public int EventMode { get; set; }
         public int TiePreventLot { get; set; }
@@ -125,6 +127,7 @@ public class EventMasterMigration : MigrationService
         public int IsItemLevelRankShow { get; set; }
         public int IsLotLevelRankShow { get; set; }
         public int IsLotLevelAuction { get; set; }
+        public int IsBasePriceforLotLevel { get; set; }
         public int IsBasicPriceApplicable { get; set; }
         public int IsBasicPriceValidationReq { get; set; }
         public int IsMinMaxBidApplicable { get; set; }
@@ -163,8 +166,10 @@ public class EventMasterMigration : MigrationService
         public DateTime? TechnicalApprovalSendDate { get; set; }
         public DateTime? TechnicalApprovalApprovedDate { get; set; }
         public string? TechnicalApprovalStatus { get; set; }
+        public int? CreatedBy { get; set; }
+        public DateTime? CreatedDate { get; set; }
         // Event Setting fields
-        public int EventMode { get; set; }
+        public string EventMode { get; set; } = "";
         public bool TiePreventLot { get; set; }
         public bool TiePreventItem { get; set; }
         public bool TargetPriceApplicable { get; set; }
@@ -200,10 +205,11 @@ public class EventMasterMigration : MigrationService
             e.EVENTID, e.EVENTCODE, e.EVENTNAME, e.EVENTDESC, e.ROUND, e.EVENTTYPE, e.CURRENTSTATUS, 
             e.PARENTID, e.PRICINGSTATUS, e.ISEXTEND, e.EventCurrencyId, e.IschkIsSendMail, e.ClientSAPId,
             e.TechnicalApprovalSendDate, e.TechnicalApprovalApprovedDate, e.TechnicalApprovalStatus,
+            e.ENTERBY, e.ENTERDATE,
             e.EventMode, e.TiePreventLot, e.TiePreventItem, e.IsTargetPriceApplicable, 
             e.IsAutoExtendedEnable, e.NoofTimesAutoExtended, e.AutoExtendedMinutes, e.ApplyExtendedTimes,
             e.GREENPERCENTAGE, e.YELLOWPERCENTAGE, e.IsItemLevelRankShow, e.IsLotLevelRankShow,
-            e.IsLotLevelAuction, e.IsBasicPriceApplicable, e.IsBasicPriceValidationReq, 
+            e.IsLotLevelAuction, e.IsBasePriceforLotLevel, e.IsBasicPriceApplicable, e.IsBasicPriceValidationReq, 
             e.IsMinMaxBidApplicable, e.IsLowestBidShow, e.BesideAuctionFirstBid, e.MinBid, e.MaxBid,
             e.LotLevelBasicPrice, e.IsPriceBidAttachmentcompulsory, e.IsDiscountApplicable,
             e.IsGSTCompulsory, e.IsTechnicalAttachmentcompulsory, e.IsProposedQty, e.IsRedyStockmandatory,
@@ -279,11 +285,11 @@ public class EventMasterMigration : MigrationService
             "TechnicalApprovalSendDate -> technical_approval_send_date (Direct)",
             "TechnicalApprovalApprovedDate -> technical_approval_approved_date (Direct)",
             "TechnicalApprovalStatus -> technical_approval_status (Direct)",
-            "created_by -> 0 (Fixed)",
-            "created_date -> NOW() (Generated)",
+            "ENTERBY -> created_by (Direct, defaults to 0 if NULL)",
+            "ENTERDATE -> created_date (Direct, defaults to NOW() if NULL)",
             "--- Event Setting Table ---",
             "event_id -> event_id (From event_master)",
-            "EventMode -> event_mode (Direct)",
+            "EventMode -> event_mode (Transform: 1='Rank', 2='Color', else '')",
             "TiePreventLot -> tie_prevent_lot (Direct)",
             "TiePreventItem -> tie_prevent_item (Direct)",
             "IsTargetPriceApplicable -> target_price_applicable (Direct)",
@@ -295,7 +301,7 @@ public class EventMasterMigration : MigrationService
             "YELLOWPERCENTAGE -> yellow_percentage (Direct)",
             "IsItemLevelRankShow -> show_item_level_rank (Direct)",
             "IsLotLevelRankShow -> show_lot_level_rank (Direct)",
-            "basic_price_applicable -> IF(IsLotLevelAuction==1) THEN IsLotLevelAuction ELSE IsBasicPriceApplicable (Conditional)",
+            "basic_price_applicable -> IF(IsLotLevelAuction > 0) THEN IsBasePriceforLotLevel ELSE IsBasicPriceApplicable (Conditional)",
             "IsBasicPriceValidationReq -> basic_price_validation_mandatory (Direct)",
             "IsMinMaxBidApplicable -> min_max_bid_applicable (Direct)",
             "IsLowestBidShow -> show_lower_bid (Direct)",
@@ -572,6 +578,8 @@ public class EventMasterMigration : MigrationService
                 TechnicalApprovalApprovedDate = reader.GetOrdinal("TechnicalApprovalApprovedDate"),
                 TechnicalApprovalStatus = reader.GetOrdinal("TechnicalApprovalStatus"),
                 IsStandalone = reader.GetOrdinal("IS_STANDALONE"),
+                EnterBy = reader.GetOrdinal("ENTERBY"),
+                EnterDate = reader.GetOrdinal("ENTERDATE"),
                 EventMode = reader.GetOrdinal("EventMode"),
                 TiePreventLot = reader.GetOrdinal("TiePreventLot"),
                 TiePreventItem = reader.GetOrdinal("TiePreventItem"),
@@ -585,6 +593,7 @@ public class EventMasterMigration : MigrationService
                 IsItemLevelRankShow = reader.GetOrdinal("IsItemLevelRankShow"),
                 IsLotLevelRankShow = reader.GetOrdinal("IsLotLevelRankShow"),
                 IsLotLevelAuction = reader.GetOrdinal("IsLotLevelAuction"),
+                IsBasePriceforLotLevel = reader.GetOrdinal("IsBasePriceforLotLevel"),
                 IsBasicPriceApplicable = reader.GetOrdinal("IsBasicPriceApplicable"),
                 IsBasicPriceValidationReq = reader.GetOrdinal("IsBasicPriceValidationReq"),
                 IsMinMaxBidApplicable = reader.GetOrdinal("IsMinMaxBidApplicable"),
@@ -628,6 +637,8 @@ public class EventMasterMigration : MigrationService
                     TechnicalApprovalApprovedDate = reader.IsDBNull(ordinals.TechnicalApprovalApprovedDate) ? null : DateTime.SpecifyKind(reader.GetDateTime(ordinals.TechnicalApprovalApprovedDate), DateTimeKind.Utc),
                     TechnicalApprovalStatus = reader.IsDBNull(ordinals.TechnicalApprovalStatus) ? null : reader.GetString(ordinals.TechnicalApprovalStatus),
                     IsStandalone = reader.IsDBNull(ordinals.IsStandalone) ? 0 : reader.GetInt32(ordinals.IsStandalone),
+                    EnterBy = reader.IsDBNull(ordinals.EnterBy) ? null : reader.GetInt32(ordinals.EnterBy),
+                    EnterDate = reader.IsDBNull(ordinals.EnterDate) ? null : DateTime.SpecifyKind(reader.GetDateTime(ordinals.EnterDate), DateTimeKind.Utc),
                     EventMode = reader.IsDBNull(ordinals.EventMode) ? 0 : reader.GetInt32(ordinals.EventMode),
                     TiePreventLot = reader.IsDBNull(ordinals.TiePreventLot) ? 0 : reader.GetInt32(ordinals.TiePreventLot),
                     TiePreventItem = reader.IsDBNull(ordinals.TiePreventItem) ? 0 : reader.GetInt32(ordinals.TiePreventItem),
@@ -641,6 +652,7 @@ public class EventMasterMigration : MigrationService
                     IsItemLevelRankShow = reader.IsDBNull(ordinals.IsItemLevelRankShow) ? 0 : reader.GetInt32(ordinals.IsItemLevelRankShow),
                     IsLotLevelRankShow = reader.IsDBNull(ordinals.IsLotLevelRankShow) ? 0 : reader.GetInt32(ordinals.IsLotLevelRankShow),
                     IsLotLevelAuction = reader.IsDBNull(ordinals.IsLotLevelAuction) ? 0 : reader.GetInt32(ordinals.IsLotLevelAuction),
+                    IsBasePriceforLotLevel = reader.IsDBNull(ordinals.IsBasePriceforLotLevel) ? 0 : reader.GetInt32(ordinals.IsBasePriceforLotLevel),
                     IsBasicPriceApplicable = reader.IsDBNull(ordinals.IsBasicPriceApplicable) ? 0 : reader.GetInt32(ordinals.IsBasicPriceApplicable),
                     IsBasicPriceValidationReq = reader.IsDBNull(ordinals.IsBasicPriceValidationReq) ? 0 : reader.GetInt32(ordinals.IsBasicPriceValidationReq),
                     IsMinMaxBidApplicable = reader.IsDBNull(ordinals.IsMinMaxBidApplicable) ? 0 : reader.GetInt32(ordinals.IsMinMaxBidApplicable),
@@ -705,10 +717,20 @@ public class EventMasterMigration : MigrationService
             _ => $"Unknown_{raw.EventType}"
         };
 
+        // Transform EventMode: 1 = 'Rank', 2 = 'Color', else ''
+        var eventMode = raw.EventMode switch
+        {
+            1 => "Rank",
+            2 => "Color",
+            _ => ""
+        };
+
         priceBidTemplateCache.TryGetValue(raw.EventId, out var priceBidTemplate);
 
+        // Conditional logic for basic_price_applicable:
+        // If IsLotLevelAuction > 0, use IsBasePriceforLotLevel, else use IsBasicPriceApplicable
         var isLotLevelAuction = raw.IsLotLevelAuction != 0;
-        var basicPriceApplicable = isLotLevelAuction ? isLotLevelAuction : (raw.IsBasicPriceApplicable != 0);
+        var basicPriceApplicable = isLotLevelAuction ? (raw.IsBasePriceforLotLevel != 0) : (raw.IsBasicPriceApplicable != 0);
 
         return new ProcessedEventRecord
         {
@@ -730,7 +752,9 @@ public class EventMasterMigration : MigrationService
             TechnicalApprovalSendDate = raw.TechnicalApprovalSendDate,
             TechnicalApprovalApprovedDate = raw.TechnicalApprovalApprovedDate,
             TechnicalApprovalStatus = SanitizeString(raw.TechnicalApprovalStatus),
-            EventMode = raw.EventMode,
+            CreatedBy = raw.EnterBy,
+            CreatedDate = raw.EnterDate,
+            EventMode = eventMode,
             TiePreventLot = raw.TiePreventLot != 0,
             TiePreventItem = raw.TiePreventItem != 0,
             TargetPriceApplicable = raw.IsTargetPriceApplicable != 0,
@@ -800,8 +824,8 @@ public class EventMasterMigration : MigrationService
                 FormatDateTime(record.TechnicalApprovalSendDate),
                 FormatDateTime(record.TechnicalApprovalApprovedDate),
                 record.TechnicalApprovalStatus != null ? EscapeTextCopy(SanitizeString(record.TechnicalApprovalStatus)) : @"\N",
-                "0",
-                now.ToString("yyyy-MM-dd HH:mm:ss.ffffff+00")
+                record.CreatedBy.HasValue ? record.CreatedBy.Value.ToString() : "0",
+                record.CreatedDate.HasValue ? FormatDateTime(record.CreatedDate) : now.ToString("yyyy-MM-dd HH:mm:ss.ffffff+00")
             };
             
             var row = string.Join("|", fields);
@@ -834,7 +858,7 @@ public class EventMasterMigration : MigrationService
             var fields = new string[]
             {
                 record.EventId.ToString(),
-                record.EventMode.ToString(),
+                EscapeTextCopy(SanitizeString(record.EventMode)),
                 record.TiePreventLot ? "t" : "f",
                 record.TiePreventItem ? "t" : "f",
                 record.TargetPriceApplicable ? "t" : "f",
