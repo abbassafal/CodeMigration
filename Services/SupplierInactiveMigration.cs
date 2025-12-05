@@ -110,12 +110,16 @@ public class SupplierInactiveMigration : MigrationService
             if (vendorId == DBNull.Value || Convert.ToInt32(vendorId) == 0)
                 continue; // Skip records with VendorId = 0
 
+            // Determine inactive boolean: treat 'x' (case-insensitive) as true, otherwise false
+            string inactiveRaw = reader["Inactive"] == DBNull.Value ? string.Empty : reader["Inactive"].ToString() ?? string.Empty;
+            bool inactiveBool = string.Equals(inactiveRaw.Trim(), "x", StringComparison.OrdinalIgnoreCase);
+
             var record = new Dictionary<string, object>
             {
                 ["supplier_inactive_id"] = reader["VendorInactiveId"],
                 ["supplier_id"] = vendorId,
                 ["plant_company_code"] = reader["CompanyCode"] ?? (object)DBNull.Value,
-                ["inactive"] = (reader["Inactive"]?.ToString() == "Y" || reader["Inactive"]?.ToString() == "1"),
+                ["inactive"] = inactiveBool,
                 ["inactivedate"] = reader["InactiveDate"] ?? (object)DBNull.Value,
                 ["created_by"] = 0,
                 ["created_date"] = DateTime.UtcNow,

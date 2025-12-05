@@ -41,6 +41,17 @@ public class CurrencyMasterMigration : MigrationService
 
     protected override async Task<int> ExecuteMigrationAsync(SqlConnection sqlConn, NpgsqlConnection pgConn, NpgsqlTransaction? transaction = null)
     {
+        // Load all company IDs from company_master so we can insert the same currency rows for each company
+        var companyIds = new List<int>();
+        using (var compCmd = new NpgsqlCommand("SELECT company_id FROM company_master", pgConn))
+        {
+            using var compReader = await compCmd.ExecuteReaderAsync();
+            while (await compReader.ReadAsync())
+            {
+                if (!compReader.IsDBNull(0)) companyIds.Add(compReader.GetInt32(0));
+            }
+        }
+
         using var sqlCmd = new SqlCommand(SelectQuery, sqlConn);
         using var reader = await sqlCmd.ExecuteReaderAsync();
 
@@ -53,24 +64,39 @@ public class CurrencyMasterMigration : MigrationService
         int insertedCount = 0;
         while (await reader.ReadAsync())
         {
-            pgCmd.Parameters.Clear();
-            pgCmd.Parameters.AddWithValue("@currency_id", reader["CurrencyMastID"]);
-            pgCmd.Parameters.AddWithValue("@company_id", 1); // Default: 1
-            pgCmd.Parameters.AddWithValue("@currency_code", reader["Currency_Code"]);
-            pgCmd.Parameters.AddWithValue("@currency_name", reader["Currency_Name"]);
-            pgCmd.Parameters.AddWithValue("@currency_short_name", DBNull.Value); // Default: null
-            pgCmd.Parameters.AddWithValue("@decimal_places", 2); // Changed to default: 2 to avoid NOT NULL constraint
-            pgCmd.Parameters.AddWithValue("@iso_code", DBNull.Value); // Default: null
-            pgCmd.Parameters.AddWithValue("@created_by", 0); // Default: 0
-            pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow); // Default: Now
-            pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value); // Default: null
-            pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value); // Default: null
-            pgCmd.Parameters.AddWithValue("@is_deleted", false); // Default: false
-            pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value); // Default: null
-            pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value); // Default: null
-            int result = await pgCmd.ExecuteNonQueryAsync();
-            if (result > 0) insertedCount++;
+            // For each source currency row, insert one row per company
+            foreach (var companyId in companyIds)
+            {
+                pgCmd.Parameters.Clear();
+                pgCmd.Parameters.AddWithValue("@currency_id", reader["CurrencyMastID"] ?? DBNull.Value);
+                pgCmd.Parameters.AddWithValue("@company_id", companyId);
+                pgCmd.Parameters.AddWithValue("@currency_code", reader["Currency_Code"] ?? DBNull.Value);
+                pgCmd.Parameters.AddWithValue("@currency_name", reader["Currency_Name"] ?? DBNull.Value);
+                pgCmd.Parameters.AddWithValue("@currency_short_name", DBNull.Value); // Default: null
+                pgCmd.Parameters.AddWithValue("@decimal_places", 2); // Default: 2
+                pgCmd.Parameters.AddWithValue("@iso_code", DBNull.Value); // Default: null
+                pgCmd.Parameters.AddWithValue("@created_by", 0); // Default: 0
+                pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow); // Default: Now
+                pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value); // Default: null
+                pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value); // Default: null
+                pgCmd.Parameters.AddWithValue("@is_deleted", false); // Default: false
+                pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value); // Default: null
+                pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value); // Default: null
+
+                try
+                {
+                    int result = await pgCmd.ExecuteNonQueryAsync();
+                    if (result > 0) insertedCount++;
+                }
+                catch (PostgresException pgEx)
+                {
+                    // Log and continue on Postgres constraint errors or duplicates
+                    Console.WriteLine($"Warning: failed to insert currency {reader["CurrencyMastID"]} for company {companyId}: {pgEx.Message}");
+                    continue;
+                }
+            }
         }
+
         return insertedCount;
     }
 }

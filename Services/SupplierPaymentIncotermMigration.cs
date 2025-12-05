@@ -12,13 +12,14 @@ public class SupplierPaymentIncotermMigration : MigrationService
 {
     protected override string SelectQuery => @"
         SELECT 
-            VendorPayIncoTermId,
+            VendorPOTermId,
             PurchaseOrgId,
             VendorId,
             PaymentTermId,
             IncoTermId,
-            IncoRemarks
-        FROM TBL_Vendor_Pay_Inco_Terms
+            IncoTermRemark,
+            ClientSAPId
+        FROM TBL_VendorPOTerm
         ORDER BY VendorPayIncoTermId";
 
     protected override string InsertQuery => @"
@@ -60,13 +61,13 @@ public class SupplierPaymentIncotermMigration : MigrationService
     {
         return new List<string>
         {
-            "VendorPayIncoTermId -> supplier_payment_incoterm (Direct)",
+            "VendorPOTermId -> supplier_payment_incoterm (Direct)",
             "PurchaseOrgId -> purchase_organization_id (Direct)",
             "VendorId -> supplier_id (Direct)",
             "PaymentTermId -> payment_term_id (Direct)",
             "IncoTermId -> incoterm_id (Direct)",
-            "IncoRemarks -> incoterm_remark (Direct)",
-            "company_id -> 1 (Fixed)",
+            "IncoTermRemark -> incoterm_remark (Direct)",
+            "ClientSAPId -> company_id (Direct)",
             "created_by -> 0 (Fixed)",
             "created_date -> NOW() (Generated)",
             "modified_by -> NULL (Fixed)",
@@ -81,13 +82,13 @@ public class SupplierPaymentIncotermMigration : MigrationService
     {
         return new List<object>
         {
-            new { source = "VendorPayIncoTermId", logic = "VendorPayIncoTermId -> supplier_payment_incoterm_id (Direct)", target = "supplier_payment_incoterm_id" },
+            new { source = "VendorPOTermId", logic = "VendorPOTermId -> supplier_payment_incoterm_id (Direct)", target = "supplier_payment_incoterm_id" },
             new { source = "PurchaseOrgId", logic = "PurchaseOrgId -> purchase_organization_id (Direct)", target = "purchase_organization_id" },
             new { source = "VendorId", logic = "VendorId -> supplier_id (Direct)", target = "supplier_id" },
             new { source = "PaymentTermId", logic = "PaymentTermId -> payment_term_id (Direct)", target = "payment_term_id" },
             new { source = "IncoTermId", logic = "IncoTermId -> incoterm_id (Direct)", target = "incoterm_id" },
-            new { source = "IncoRemarks", logic = "IncoRemarks -> incoterm_remark (Direct)", target = "incoterm_remark" },
-            new { source = "-", logic = "company_id -> 1 (Fixed)", target = "company_id" },
+            new { source = "IncoTermRemark", logic = "IncoTermRemark -> incoterm_remark (Direct)", target = "incoterm_remark" },
+            new { source = "ClientSAPId", logic = "ClientSAPId -> company_id (Direct)", target = "company_id" },
             new { source = "-", logic = "created_by -> 0 (Fixed)", target = "created_by" },
             new { source = "-", logic = "created_date -> NOW() (Generated)", target = "created_date" },
             new { source = "-", logic = "modified_by -> NULL (Fixed)", target = "modified_by" },
@@ -107,13 +108,13 @@ public class SupplierPaymentIncotermMigration : MigrationService
         while (await reader.ReadAsync())
         {
             using var insertCmd = new NpgsqlCommand(InsertQuery, pgConn, transaction);
-            insertCmd.Parameters.AddWithValue("@supplier_payment_incoterm_id", reader["VendorPayIncoTermId"]);
+            insertCmd.Parameters.AddWithValue("@supplier_payment_incoterm_id", reader["VendorPOTermId"]);
             insertCmd.Parameters.AddWithValue("@purchase_organization_id", reader["PurchaseOrgId"]);
             insertCmd.Parameters.AddWithValue("@supplier_id", reader["VendorId"]);
             insertCmd.Parameters.AddWithValue("@payment_term_id", reader["PaymentTermId"]);
             insertCmd.Parameters.AddWithValue("@incoterm_id", reader["IncoTermId"]);
-            insertCmd.Parameters.AddWithValue("@incoterm_remark", reader["IncoRemarks"] ?? (object)DBNull.Value);
-            insertCmd.Parameters.AddWithValue("@company_id", 1);
+            insertCmd.Parameters.AddWithValue("@incoterm_remark", reader["IncoTermRemark"] ?? (object)DBNull.Value);
+            insertCmd.Parameters.AddWithValue("@company_id", reader["ClientSAPId"]);
             insertCmd.Parameters.AddWithValue("@created_by", 0);
             insertCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow);
             insertCmd.Parameters.AddWithValue("@modified_by", DBNull.Value);

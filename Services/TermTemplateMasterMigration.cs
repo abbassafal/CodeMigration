@@ -13,12 +13,17 @@ public class TermTemplateMasterMigration : MigrationService
     private readonly ILogger<TermTemplateMasterMigration> _logger;
 
     protected override string SelectQuery => @"
-        SELECT
-            CLAUSE_MASTER_ID,
-            REF_KEY,
-            DEFINATION
-        FROM TBL_CLAUSEMASTER
-        ORDER BY CLAUSE_MASTER_ID";
+        SELECT 
+            TBL_CLAUSEMASTER.CLAUSE_MASTER_ID,
+            TBL_CLAUSEMASTER.DEFINATION AS TemplateName,
+            (
+                SELECT TBL_CLAUSETERMMASTER.TERMID 
+                FROM TBL_CLAUSETERMMASTER 
+                WHERE TBL_CLAUSETERMMASTER.TERMDESCRIPTION = TBL_CLAUSETRN.SUBCLAUSE
+            ) AS TermId
+        FROM TBL_CLAUSEMASTER 
+        INNER JOIN TBL_CLAUSETRN ON TBL_CLAUSETRN.CLAUSE_MST_ID = TBL_CLAUSEMASTER.CLAUSE_MASTER_ID
+        ORDER BY TBL_CLAUSEMASTER.CLAUSE_MASTER_ID";
 
     protected override string InsertQuery => @"
         INSERT INTO term_template_master (
@@ -108,15 +113,6 @@ public class TermTemplateMasterMigration : MigrationService
 
         try
         {
-            // Load a valid term_master_id
-            int? termMasterId = await LoadTermMasterIdAsync(pgConn);
-            if (!termMasterId.HasValue)
-            {
-                _logger.LogError("No term_master_id found in term_master table. Cannot proceed with migration.");
-                return 0;
-            }
-            _logger.LogInformation($"Using term_master_id: {termMasterId.Value}");
-
             using var sqlCommand = new SqlCommand(SelectQuery, sqlConn);
             sqlCommand.CommandTimeout = 300;
 
@@ -130,8 +126,8 @@ public class TermTemplateMasterMigration : MigrationService
                 totalRecords++;
 
                 var clauseMasterId = reader["CLAUSE_MASTER_ID"];
-                var refKey = reader["REF_KEY"];
-                var defination = reader["DEFINATION"];
+                var templateName = reader["TemplateName"];
+                var termId = reader["TermId"];
 
                 // Skip if CLAUSE_MASTER_ID is NULL
                 if (clauseMasterId == DBNull.Value)
@@ -150,16 +146,19 @@ public class TermTemplateMasterMigration : MigrationService
                     continue;
                 }
 
-                // Use DEFINATION for term_template_name, fallback to REF_KEY if NULL
-                var templateName = defination != DBNull.Value && !string.IsNullOrWhiteSpace(defination?.ToString()) 
-                    ? defination 
-                    : refKey ?? DBNull.Value;
+                // Skip if TermId is NULL (no matching term found)
+                if (termId == DBNull.Value)
+                {
+                    skippedRecords++;
+                    _logger.LogWarning($"Skipping record {clauseMasterIdValue} - TermId is NULL");
+                    continue;
+                }
 
                 var record = new Dictionary<string, object>
                 {
                     ["term_template_master_id"] = clauseMasterIdValue,
-                    ["term_template_name"] = templateName,
-                    ["term_master_id"] = termMasterId.Value,
+                    ["term_template_name"] = templateName ?? DBNull.Value,
+                    ["term_master_id"] = termId,
                     ["created_by"] = DBNull.Value,
                     ["created_date"] = DBNull.Value,
                     ["modified_by"] = DBNull.Value,
@@ -195,29 +194,6 @@ public class TermTemplateMasterMigration : MigrationService
         {
             _logger.LogError(ex, "Error during Term Template Master migration");
             throw;
-        }
-    }
-
-    private async Task<int?> LoadTermMasterIdAsync(NpgsqlConnection pgConn)
-    {
-        try
-        {
-            var query = "SELECT term_master_id FROM term_master ORDER BY term_master_id LIMIT 1";
-            using var command = new NpgsqlCommand(query, pgConn);
-            var result = await command.ExecuteScalarAsync();
-
-            if (result != null && result != DBNull.Value)
-            {
-                return Convert.ToInt32(result);
-            }
-
-            _logger.LogWarning("No term_master_id found in term_master table");
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading term_master_id");
-            return null;
         }
     }
 

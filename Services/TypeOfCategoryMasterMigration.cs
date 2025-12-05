@@ -61,6 +61,17 @@ public class TypeOfCategoryMasterMigration : MigrationService
         Console.WriteLine("🚀 Starting TypeOfCategoryMaster migration...");
         Console.WriteLine($"📋 Executing query...");
         
+        // Load all company IDs from company_master so we can insert each type_of_category row for every company
+        var companyIds = new List<int>();
+        using (var compCmd = new NpgsqlCommand("SELECT company_id FROM company_master", pgConn))
+        {
+            using var compReader = await compCmd.ExecuteReaderAsync();
+            while (await compReader.ReadAsync())
+            {
+                if (!compReader.IsDBNull(0)) companyIds.Add(compReader.GetInt32(0));
+            }
+        }
+
         using var sqlCmd = new SqlCommand(SelectQuery, sqlConn);
         using var reader = await sqlCmd.ExecuteReaderAsync();
 
@@ -88,40 +99,46 @@ public class TypeOfCategoryMasterMigration : MigrationService
             {
                 Console.WriteLine($"📊 Processed {totalReadCount} records so far... (Inserted: {insertedCount}, Skipped: {skippedCount})");
             }
-            
-            try
-            {
-                pgCmd.Parameters.Clear();
 
-                pgCmd.Parameters.AddWithValue("@type_of_category_id", reader["id"] ?? DBNull.Value);
-                pgCmd.Parameters.AddWithValue("@type_of_category_name", reader["CategoryType"] ?? DBNull.Value);
-                pgCmd.Parameters.AddWithValue("@company_id", 1); // Fixed value as requested
-                pgCmd.Parameters.AddWithValue("@created_by", DBNull.Value);
-                pgCmd.Parameters.AddWithValue("@created_date", DBNull.Value);
-                pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value);
-                pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value);
-                pgCmd.Parameters.AddWithValue("@is_deleted", false);
-                pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value);
-                pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value);
-
-                int result = await pgCmd.ExecuteNonQueryAsync();
-                if (result > 0) insertedCount++;
-            }
-            catch (Exception ex)
+            // For each source row, insert one row per company
+            foreach (var companyId in companyIds)
             {
-                skippedCount++;
-                Console.WriteLine($"❌ Error migrating id {reader["id"]}: {ex.Message}");
-                Console.WriteLine($"   Stack Trace: {ex.StackTrace}");
-                if (ex.InnerException != null)
+                try
                 {
-                    Console.WriteLine($"   Inner Exception: {ex.InnerException.Message}");
+                    pgCmd.Parameters.Clear();
+
+                    pgCmd.Parameters.AddWithValue("@type_of_category_id", reader["id"] ?? DBNull.Value);
+                    pgCmd.Parameters.AddWithValue("@type_of_category_name", reader["CategoryType"] ?? DBNull.Value);
+                    pgCmd.Parameters.AddWithValue("@company_id", companyId);
+                    pgCmd.Parameters.AddWithValue("@created_by", DBNull.Value);
+                    pgCmd.Parameters.AddWithValue("@created_date", DBNull.Value);
+                    pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value);
+                    pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value);
+                    pgCmd.Parameters.AddWithValue("@is_deleted", false);
+                    pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value);
+                    pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value);
+
+                    int result = await pgCmd.ExecuteNonQueryAsync();
+                    if (result > 0) insertedCount++;
+                }
+                catch (PostgresException pgEx)
+                {
+                    skippedCount++;
+                    Console.WriteLine($"❌ Warning: failed to insert id {reader["id"]} for company {companyId}: {pgEx.Message}");
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    skippedCount++;
+                    Console.WriteLine($"❌ Error migrating id {reader["id"]} for company {companyId}: {ex.Message}");
+                    continue;
                 }
             }
         }
 
         Console.WriteLine($"\n📊 Migration Summary:");
-        Console.WriteLine($"   Total records read: {totalReadCount}");
-        Console.WriteLine($"   ✓ Successfully inserted: {insertedCount}");
+        Console.WriteLine($"   Total source records read: {totalReadCount}");
+        Console.WriteLine($"   ✓ Successfully inserted rows: {insertedCount}");
         Console.WriteLine($"   ❌ Skipped (errors): {skippedCount}");
         
         if (totalReadCount == 0)
