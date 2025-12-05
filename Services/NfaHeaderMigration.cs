@@ -611,7 +611,7 @@ public class NfaHeaderMigration : MigrationService
                     ["meeting_quality_requirement_justification"] = reader["MeetingqualityrequirementJustification"] ?? DBNull.Value,
                     ["purchase_order_should_be_allotted_to_l1_supplier_justification"] = reader["PurchaseordershouldbeallottedtoL1supplierJustification"] ?? DBNull.Value,
                     ["brief_note"] = reader["StandAloneBriefNote"] ?? DBNull.Value,
-                    ["nfa_printt_file_path"] = DBNull.Value,
+                    ["nfa_printt_file_path"] = "/Documents/TechnicalDocuments/"+ (reader["AdditionalDocument"] != DBNull.Value ? reader["AdditionalDocument"].ToString() : ""),
                     ["nfa_printt_file_name"] = reader["AdditionalDocument"] ?? DBNull.Value,
                     ["sales_person_name"] = reader["SALES_PERSON"] ?? DBNull.Value,
                     ["sales_phone_number"] = reader["TELEPHONE"] ?? DBNull.Value,

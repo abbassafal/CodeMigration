@@ -78,20 +78,20 @@ public class SupplierTermDeviationsMigration : MigrationService
     {
         return new List<string>
         {
-            "Direct",  // supplier_term_deviation_id
-            "Direct",  // supplier_term_id
-            "Lookup",  // event_id (from supplier_terms via supplier_term_id)
-            "Direct",  // deviation_remarks
-            "Direct",  // user_id
-            "Lookup",  // supplier_id (from supplier_terms via supplier_term_id)
-            "Fixed",   // created_by
-            "Fixed",   // created_date
-            "Fixed",   // modified_by
-            "Fixed",   // modified_date
-            "Fixed",   // is_deleted
-            "Fixed",   // deleted_by
-            "Fixed",   // deleted_date
-            "Direct"   // user_type
+            "Direct",      // supplier_term_deviation_id
+            "Direct",      // supplier_term_id
+            "Lookup",      // event_id (from supplier_terms via supplier_term_id)
+            "Direct",      // deviation_remarks
+            "Conditional", // user_id (ACTIONBY if USERTYPE != 'Vendor', else NULL)
+            "Conditional", // supplier_id (ACTIONBY if USERTYPE = 'Vendor', else from supplier_terms lookup)
+            "Fixed",       // created_by
+            "Fixed",       // created_date
+            "Fixed",       // modified_by
+            "Fixed",       // modified_date
+            "Fixed",       // is_deleted
+            "Fixed",       // deleted_by
+            "Fixed",       // deleted_date
+            "Direct"       // user_type
         };
     }
 
@@ -103,8 +103,8 @@ public class SupplierTermDeviationsMigration : MigrationService
             new { source = "VENDORDEVIATIONMSTID", logic = "VENDORDEVIATIONMSTID -> supplier_term_id (Foreign key to supplier_terms - SupplierTermId)", target = "supplier_term_id" },
             new { source = "-", logic = "event_id -> Lookup from supplier_terms (EventId)", target = "event_id" },
             new { source = "DEVIATIONREMARKS", logic = "DEVIATIONREMARKS -> deviation_remarks (DEVIATIONREMARKS)", target = "deviation_remarks" },
-            new { source = "ACTIONBY", logic = "ACTIONBY -> user_id (Foreign key to users - UserId)", target = "user_id" },
-            new { source = "-", logic = "supplier_id -> Lookup from supplier_terms (SupplierId)", target = "supplier_id" },
+            new { source = "ACTIONBY", logic = "ACTIONBY -> user_id (Conditional: if USERTYPE != 'Vendor', else NULL)", target = "user_id" },
+            new { source = "ACTIONBY", logic = "ACTIONBY -> supplier_id (Conditional: if USERTYPE = 'Vendor', else from supplier_terms lookup)", target = "supplier_id" },
             new { source = "ACTIONDATE", logic = "ACTIONDATE -> Not mapped to target table", target = "-" },
             new { source = "ISUPDATEDCLAUSE", logic = "ISUPDATEDCLAUSE -> Not mapped to target table", target = "-" },
             new { source = "USERTYPE", logic = "USERTYPE -> user_type", target = "user_type" },
@@ -198,14 +198,33 @@ public class SupplierTermDeviationsMigration : MigrationService
 
                 var supplierTermData = supplierTermsMap[vendorDeviationMstIdValue];
 
-                // Validate user_id if not null
-                if (actionBy != DBNull.Value)
+                // Determine user_id and supplier_id based on USERTYPE
+                object userId = DBNull.Value;
+                object supplierId = DBNull.Value;
+                
+                string userTypeValue = userType != DBNull.Value ? userType?.ToString()?.Trim() ?? string.Empty : string.Empty;
+                
+                if (string.Equals(userTypeValue, "Vendor", StringComparison.OrdinalIgnoreCase))
                 {
-                    int actionByValue = Convert.ToInt32(actionBy);
-                    if (!validUserIds.Contains(actionByValue))
+                    // If USERTYPE = 'Vendor', ACTIONBY goes to supplier_id
+                    supplierId = actionBy ?? DBNull.Value;
+                }
+                else
+                {
+                    // If USERTYPE != 'Vendor', ACTIONBY goes to user_id
+                    userId = actionBy ?? DBNull.Value;
+                    // Use supplier_id from supplier_terms lookup
+                    supplierId = supplierTermData.SupplierId.HasValue ? (object)supplierTermData.SupplierId.Value : DBNull.Value;
+                }
+                
+                // Validate user_id if not null and USERTYPE != 'Vendor'
+                if (userId != DBNull.Value)
+                {
+                    int userIdValue = Convert.ToInt32(userId);
+                    if (!validUserIds.Contains(userIdValue))
                     {
                         skippedRecords++;
-                        _logger.LogWarning($"Skipping VENDORDEVIATIONTRNID {vendorDeviationTrnIdValue} - Invalid user_id: {actionByValue}");
+                        _logger.LogWarning($"Skipping VENDORDEVIATIONTRNID {vendorDeviationTrnIdValue} - Invalid user_id: {userIdValue}");
                         continue;
                     }
                 }
@@ -216,8 +235,8 @@ public class SupplierTermDeviationsMigration : MigrationService
                     ["supplier_term_id"] = vendorDeviationMstIdValue,
                     ["event_id"] = supplierTermData.EventId.HasValue ? (object)supplierTermData.EventId.Value : DBNull.Value,
                     ["deviation_remarks"] = deviationRemarks ?? DBNull.Value,
-                    ["user_id"] = actionBy ?? DBNull.Value,
-                    ["supplier_id"] = supplierTermData.SupplierId.HasValue ? (object)supplierTermData.SupplierId.Value : DBNull.Value,
+                    ["user_id"] = userId,
+                    ["supplier_id"] = supplierId,
                     ["created_by"] = DBNull.Value,
                     ["created_date"] = DBNull.Value,
                     ["modified_by"] = DBNull.Value,

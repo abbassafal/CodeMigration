@@ -17,7 +17,7 @@ public class ARCAttachmentMigration : MigrationService
     protected override List<string> GetLogics()
     {
         return new List<string> {
-            "Direct", "Direct", "Direct", "Direct", "Direct", "Fixed: 0", "Fixed: DBNull", "Fixed: 0", "Fixed: DBNull", "Fixed: false", "Fixed: null", "Fixed: null"
+            "Direct", "Direct", "Direct", "Direct", "Direct", "Direct", "Fixed: DBNull", "Fixed: 0", "Fixed: DBNull", "Fixed: false", "Fixed: null", "Fixed: null"
         };
     }
 
@@ -35,7 +35,7 @@ public class ARCAttachmentMigration : MigrationService
             new { source = "UPLOADPATH", target = "upload_path" },
             new { source = "FILENAME", target = "file_name" },
             new { source = "Remarks", target = "remarks" },
-            new { source = "-", target = "created_by" },
+            new { source = "CreatedBy", target = "created_by" },
             new { source = "-", target = "created_date" },
             new { source = "-", target = "modified_by" },
             new { source = "-", target = "modified_date" },
@@ -81,7 +81,7 @@ public class ARCAttachmentMigration : MigrationService
                 ["upload_path"] = reader["UPLOADPATH"] ?? (object)DBNull.Value,
                 ["file_name"] = reader["FILENAME"] ?? (object)DBNull.Value,
                 ["remarks"] = reader["Remarks"] ?? (object)DBNull.Value,
-                ["created_by"] = 0,
+                ["created_by"] = reader["CreatedBy"] ?? (object)DBNull.Value,
                 ["created_date"] = DBNull.Value,
                 ["modified_by"] = 0,
                 ["modified_date"] = DBNull.Value,

@@ -122,10 +122,10 @@ public class ARCSubMigration : MigrationService
             "Direct", // used_material_qty
             "Direct", // used_material_value
             "Direct", // tax_id
-            "Direct", // created_by
-            "Direct", // created_date
-            "Direct", // modified_by
-            "Direct", // modified_date
+            "Direct", // created_by (from CreatedBy)
+            "Direct", // created_date (from CreatedDate)
+            "Direct", // modified_by (from UpdatedBy)
+            "Direct", // modified_date (from UpdatedDate)
             "Fixed: false", // is_deleted
             "Fixed: null", // deleted_by
             "Fixed: null"  // deleted_date

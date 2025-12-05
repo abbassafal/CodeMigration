@@ -14,13 +14,15 @@ public class SupplierTechnicalParameterMigration : MigrationService
 
     protected override string SelectQuery => @"
         SELECT
-            VendorTechItemTermId,
-            TechItemTermId,
-            Value,
-            VendorId,
-            PBID
+            TBL_VendorTechItemTerm.VendorTechItemTermId,
+            TBL_VendorTechItemTerm.TechItemTermId AS User_technical_Parameter_id,
+            TBL_VendorTechItemTerm.Value AS Supplier_technical_Parameter_Response,
+            TBL_VendorTechItemTerm.VendorId AS Supplier_id,
+            TBL_VendorTechItemTerm.PBID AS event_Item_Id,
+            TBL_PB_BUYER.EVENTID
         FROM TBL_VendorTechItemTerm
-        ORDER BY VendorTechItemTermId";
+        INNER JOIN TBL_PB_BUYER ON TBL_PB_BUYER.PBID = TBL_VendorTechItemTerm.PBID
+        ORDER BY TBL_VendorTechItemTerm.VendorTechItemTermId";
 
     protected override string InsertQuery => @"
         INSERT INTO supplier_technical_parameter (
@@ -77,8 +79,8 @@ public class SupplierTechnicalParameterMigration : MigrationService
             "Direct",  // user_technical_parameter_id
             "Direct",  // supplier_technical_parameter_response
             "Direct",  // supplier_id
-            "Lookup",  // event_item_id (from user_price_bid via PBID)
-            "Lookup",  // event_id (from user_price_bid via PBID)
+            "Direct",  // event_item_id (from PBID)
+            "Direct",  // event_id (from TBL_PB_BUYER.EVENTID via INNER JOIN)
             "Fixed",   // created_by
             "Fixed",   // created_date
             "Fixed",   // modified_by
@@ -97,8 +99,8 @@ public class SupplierTechnicalParameterMigration : MigrationService
             new { source = "TechItemTermId", logic = "TechItemTermId -> user_technical_parameter_id (Foreign key to user_technical_parameter - UserTechnicalParameterId)", target = "user_technical_parameter_id" },
             new { source = "Value", logic = "Value -> supplier_technical_parameter_response (SupplierTechnicalParameterResponse)", target = "supplier_technical_parameter_response" },
             new { source = "VendorId", logic = "VendorId -> supplier_id (Foreign key to supplier_master - SupplierId)", target = "supplier_id" },
-            new { source = "PBID", logic = "PBID -> event_item_id (Lookup from user_price_bid - EventItemsID)", target = "event_item_id" },
-            new { source = "-", logic = "event_id -> Lookup from user_price_bid via PBID (EventId)", target = "event_id" },
+            new { source = "PBID", logic = "PBID -> event_item_id (Direct from TBL_VendorTechItemTerm.PBID)", target = "event_item_id" },
+            new { source = "EVENTID", logic = "EVENTID -> event_id (Direct from TBL_PB_BUYER via INNER JOIN on PBID)", target = "event_id" },
             new { source = "-", logic = "created_by -> NULL (Fixed Default)", target = "created_by" },
             new { source = "-", logic = "created_date -> NULL (Fixed Default)", target = "created_date" },
             new { source = "-", logic = "modified_by -> NULL (Fixed Default)", target = "modified_by" },
@@ -132,10 +134,6 @@ public class SupplierTechnicalParameterMigration : MigrationService
             var validSupplierIds = await LoadValidSupplierIdsAsync(pgConn);
             _logger.LogInformation($"Loaded {validSupplierIds.Count} valid supplier IDs");
 
-            // Load user_price_bid mappings (PBID -> event_item_id, event_id)
-            var userPriceBidMap = await LoadUserPriceBidMapAsync(pgConn);
-            _logger.LogInformation($"Loaded {userPriceBidMap.Count} user_price_bid mappings");
-
             using var sqlCommand = new SqlCommand(SelectQuery, sqlConn);
             sqlCommand.CommandTimeout = 300;
 
@@ -149,10 +147,11 @@ public class SupplierTechnicalParameterMigration : MigrationService
                 totalRecords++;
 
                 var vendorTechItemTermId = reader["VendorTechItemTermId"];
-                var techItemTermId = reader["TechItemTermId"];
-                var value = reader["Value"];
-                var vendorId = reader["VendorId"];
-                var pbId = reader["PBID"];
+                var techItemTermId = reader["User_technical_Parameter_id"];
+                var value = reader["Supplier_technical_Parameter_Response"];
+                var vendorId = reader["Supplier_id"];
+                var pbId = reader["event_Item_Id"];
+                var eventId = reader["EVENTID"];
 
                 // Skip if VendorTechItemTermId is NULL
                 if (vendorTechItemTermId == DBNull.Value)
@@ -207,20 +206,9 @@ public class SupplierTechnicalParameterMigration : MigrationService
                     continue;
                 }
 
-                // Get event_item_id and event_id from user_price_bid via PBID
-                int? eventItemId = null;
-                int? eventId = null;
-
-                if (pbId != DBNull.Value)
-                {
-                    int pbIdValue = Convert.ToInt32(pbId);
-                    if (userPriceBidMap.ContainsKey(pbIdValue))
-                    {
-                        var priceBidData = userPriceBidMap[pbIdValue];
-                        eventItemId = priceBidData.EventItemId;
-                        eventId = priceBidData.EventId;
-                    }
-                }
+                // Get event_item_id and event_id directly from query result
+                int? eventItemId = pbId != DBNull.Value ? Convert.ToInt32(pbId) : (int?)null;
+                int? eventIdValue = eventId != DBNull.Value ? Convert.ToInt32(eventId) : (int?)null;
 
                 var record = new Dictionary<string, object>
                 {
@@ -229,7 +217,7 @@ public class SupplierTechnicalParameterMigration : MigrationService
                     ["supplier_technical_parameter_response"] = value ?? DBNull.Value,
                     ["supplier_id"] = vendorIdValue,
                     ["event_item_id"] = eventItemId.HasValue ? (object)eventItemId.Value : DBNull.Value,
-                    ["event_id"] = eventId.HasValue ? (object)eventId.Value : DBNull.Value,
+                    ["event_id"] = eventIdValue.HasValue ? (object)eventIdValue.Value : DBNull.Value,
                     ["created_by"] = DBNull.Value,
                     ["created_date"] = DBNull.Value,
                     ["modified_by"] = DBNull.Value,
@@ -318,34 +306,7 @@ public class SupplierTechnicalParameterMigration : MigrationService
         return validIds;
     }
 
-    private async Task<Dictionary<int, (int? EventItemId, int? EventId)>> LoadUserPriceBidMapAsync(NpgsqlConnection pgConn)
-    {
-        var map = new Dictionary<int, (int? EventItemId, int? EventId)>();
 
-        try
-        {
-            var query = "SELECT user_price_bid_id, event_items_id, event_id FROM user_price_bid WHERE user_price_bid_id IS NOT NULL";
-            using var command = new NpgsqlCommand(query, pgConn);
-            using var reader = await command.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
-            {
-                int userPriceBidId = reader.GetInt32(0);
-                int? eventItemId = reader.IsDBNull(1) ? (int?)null : reader.GetInt32(1);
-                int? eventId = reader.IsDBNull(2) ? (int?)null : reader.GetInt32(2);
-                
-                map[userPriceBidId] = (eventItemId, eventId);
-            }
-
-            _logger.LogInformation($"Loaded {map.Count} user_price_bid mappings");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading user_price_bid mappings");
-        }
-
-        return map;
-    }
 
     private async Task<int> InsertBatchWithTransactionAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn)
     {
