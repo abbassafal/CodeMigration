@@ -52,7 +52,7 @@ SELECT
     ClientSAPId
 FROM TBL_PB_BUYER
 ";
-
+    
     protected override string InsertQuery => @"
 INSERT INTO event_items (
     event_item_id, event_id, erp_pr_lines_id, material_code, material_short_text, 

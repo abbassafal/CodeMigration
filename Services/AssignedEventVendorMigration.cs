@@ -13,39 +13,46 @@ public class AssignedEventVendorMigration : MigrationService
     private readonly ILogger<AssignedEventVendorMigration> _logger;
 
     protected override string SelectQuery => @"
-SELECT
-    EVENTSELUSERID,
-    EVENTID,
-    USERID,
-    USERTYPE,
-    ENTBY,
-    ENTDATETIME,
-    PARTICIPATESTATUS,
-    REGRATECOMMENT,
-    TECHNICALSTATUS,
-    TCSTATUS,
-    PRICEBIDSTATUS,
-    RegrateTypeId,
-    ISTECHAPPROVE,
-    ISSAROGATEAPPROVE,
-    REQUESTBYSAROGATE,
-    VendorCurrencyId,
-    TechRemarks,
-    Score,
-    ScoreDocument,
-    IS_SCORE_ASSIGN,
-    IS_COMMERCIAL_ACCESS,
-    IS_TECHNICAL_ACCESS,
-    IS_TECHNICAL_APPROVE,
-    AssignType,
-    AlternativeApproval,
-    SarogateApprovedBy,
-    SarogateApproveDate,
-    SendEmail,
-    LastAutoSendMail,
-    IsSourceListUser
+SELECT DISTINCT
+    TBL_EVENTSELECTEDUSER.EVENTSELUSERID,
+    TBL_EVENTSELECTEDUSER.EVENTID,
+    TBL_EVENTSELECTEDUSER.USERID,
+    TBL_EVENTSELECTEDUSER.USERTYPE,
+    TBL_EVENTSELECTEDUSER.ENTBY,
+    TBL_EVENTSELECTEDUSER.ENTDATETIME,
+    TBL_EVENTSELECTEDUSER.PARTICIPATESTATUS,
+    TBL_EVENTSELECTEDUSER.REGRATECOMMENT,
+    TBL_EVENTSELECTEDUSER.TECHNICALSTATUS,
+    TBL_EVENTSELECTEDUSER.TCSTATUS,
+    TBL_EVENTSELECTEDUSER.PRICEBIDSTATUS,
+    TBL_EVENTSELECTEDUSER.RegrateTypeId,
+    TBL_EVENTSELECTEDUSER.ISTECHAPPROVE,
+    TBL_EVENTSELECTEDUSER.ISSAROGATEAPPROVE,
+    TBL_EVENTSELECTEDUSER.REQUESTBYSAROGATE,
+    TBL_EVENTSELECTEDUSER.VendorCurrencyId,
+    TBL_EVENTSELECTEDUSER.TechRemarks,
+    TBL_EVENTSELECTEDUSER.Score,
+    TBL_EVENTSELECTEDUSER.ScoreDocument,
+    TBL_EVENTSELECTEDUSER.IS_SCORE_ASSIGN,
+    TBL_EVENTSELECTEDUSER.IS_COMMERCIAL_ACCESS,
+    TBL_EVENTSELECTEDUSER.IS_TECHNICAL_ACCESS,
+    TBL_EVENTSELECTEDUSER.IS_TECHNICAL_APPROVE,
+    TBL_EVENTSELECTEDUSER.AssignType,
+    TBL_EVENTSELECTEDUSER.AlternativeApproval,
+    TBL_EVENTSELECTEDUSER.SarogateApprovedBy,
+    TBL_EVENTSELECTEDUSER.SarogateApproveDate,
+    TBL_EVENTSELECTEDUSER.SendEmail,
+    TBL_EVENTSELECTEDUSER.LastAutoSendMail,
+    TBL_EVENTSELECTEDUSER.IsSourceListUser,
+    TBL_PB_SUPPLIER.BifurcationDone,
+    TBL_PB_SUPPLIER.VendorName
 FROM TBL_EVENTSELECTEDUSER
-WHERE USERTYPE = 'Vendor'
+LEFT JOIN TBL_PB_SUPPLIER 
+    ON TBL_PB_SUPPLIER.EVENTID = TBL_EVENTSELECTEDUSER.EVENTID 
+    AND TBL_EVENTSELECTEDUSER.USERID = TBL_PB_SUPPLIER.SUPPLIER_ID 
+    AND TBL_EVENTSELECTEDUSER.USERTYPE = 'VENDOR'
+    AND TBL_PB_SUPPLIER.SEQUENCEID > 0
+WHERE TBL_EVENTSELECTEDUSER.USERTYPE = 'Vendor'
 ";
 
     protected override string InsertQuery => @"
@@ -86,24 +93,24 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
 
     protected override List<string> GetLogics() => new List<string>
     {
-        "Direct", // assigned_event_vendor_id
-        "Direct", // event_id
-        "Direct", // supplier_id
-        "Direct", // supplier_participation_status
-        "Direct", // supplier_event_regrate_remark
-        "Direct", // supplier_price_bid_status
-        "Direct", // supplier_price_bid_currency_id
-        "Direct", // supplier_email_address
-        "Direct", // supplier_source_status
-        "Fixed",  // lot_auctionbifurcation_flag
-        "Fixed",  // partner_vendor_name
-        "Fixed",  // created_by
-        "Fixed",  // created_date
-        "Fixed",  // modified_by
-        "Fixed",  // modified_date
-        "Fixed",  // is_deleted
-        "Fixed",  // deleted_by
-        "Fixed"   // deleted_date
+        "Direct",      // assigned_event_vendor_id
+        "Direct",      // event_id
+        "Direct",      // supplier_id
+        "Direct",      // supplier_participation_status
+        "Direct",      // supplier_event_regrate_remark
+        "Direct",      // supplier_price_bid_status
+        "Direct",      // supplier_price_bid_currency_id
+        "Direct",      // supplier_email_address
+        "Direct",      // supplier_source_status
+        "Conditional", // lot_auctionbifurcation_flag (from BifurcationDone: 1 -> true, else false)
+        "Direct",      // partner_vendor_name (from VendorName)
+        "Fixed",       // created_by
+        "Fixed",       // created_date
+        "Fixed",       // modified_by
+        "Fixed",       // modified_date
+        "Fixed",       // is_deleted
+        "Fixed",       // deleted_by
+        "Fixed"        // deleted_date
     };
 
     public override List<object> GetMappings()
@@ -119,8 +126,8 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             new { source = "VendorCurrencyId", logic = "VendorCurrencyId -> supplier_price_bid_currency_id (Ref from currency Master)", target = "supplier_price_bid_currency_id" },
             new { source = "SendEmail", logic = "SendEmail -> supplier_email_address (Direct)", target = "supplier_email_address" },
             new { source = "IsSourceListUser", logic = "IsSourceListUser -> supplier_source_status (Direct)", target = "supplier_source_status" },
-            new { source = "-", logic = "lot_auctionbifurcation_flag -> false (Fixed Default)", target = "lot_auctionbifurcation_flag" },
-            new { source = "-", logic = "partner_vendor_name -> NULL (Fixed Default)", target = "partner_vendor_name" },
+            new { source = "BifurcationDone", logic = "BifurcationDone -> lot_auctionbifurcation_flag (Conditional: 1 -> true, else false) from TBL_PB_SUPPLIER via LEFT JOIN", target = "lot_auctionbifurcation_flag" },
+            new { source = "VendorName", logic = "VendorName -> partner_vendor_name (Direct) from TBL_PB_SUPPLIER via LEFT JOIN", target = "partner_vendor_name" },
             new { source = "-", logic = "created_by -> NULL (Fixed Default)", target = "created_by" },
             new { source = "-", logic = "created_date -> NULL (Fixed Default)", target = "created_date" },
             new { source = "-", logic = "modified_by -> NULL (Fixed Default)", target = "modified_by" },
@@ -197,6 +204,18 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             var vendorCurrencyId = reader["VendorCurrencyId"] ?? DBNull.Value;
             var sendEmail = reader["SendEmail"] ?? DBNull.Value;
             var isSourceListUser = reader["IsSourceListUser"] ?? DBNull.Value;
+            
+            // Read BifurcationDone and VendorName from LEFT JOIN with TBL_PB_SUPPLIER
+            var bifurcationDone = reader["BifurcationDone"] ?? DBNull.Value;
+            var vendorName = reader["VendorName"] ?? DBNull.Value;
+            
+            // Convert BifurcationDone to boolean: true if value is 1, false otherwise
+            bool lotAuctionBifurcationFlag = false;
+            if (bifurcationDone != DBNull.Value)
+            {
+                int bifurcationValue = Convert.ToInt32(bifurcationDone);
+                lotAuctionBifurcationFlag = (bifurcationValue == 1);
+            }
 
             var record = new Dictionary<string, object>
             {
@@ -209,8 +228,8 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
                 ["supplier_price_bid_currency_id"] = vendorCurrencyId,
                 ["supplier_email_address"] = sendEmail,
                 ["supplier_source_status"] = isSourceListUser,
-                ["lot_auctionbifurcation_flag"] = false,
-                ["partner_vendor_name"] = DBNull.Value,
+                ["lot_auctionbifurcation_flag"] = lotAuctionBifurcationFlag,
+                ["partner_vendor_name"] = vendorName,
                 ["created_by"] = DBNull.Value,
                 ["created_date"] = DBNull.Value,
                 ["modified_by"] = DBNull.Value,

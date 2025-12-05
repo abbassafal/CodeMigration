@@ -17,16 +17,11 @@ SELECT
     TechApprovalHistory_Id,
     EVENT_ID,
     ApprovalUserId,
-    LevelId,
-    Actionby,
-    ActionDate,
-    ActionRemark,
-    ActionStatus,
+    LevelId AS ApprovalLevel,
     CreatedBy,
+    CreatedDate AS AssignDate,
     CreatedDate,
-    RecallUserId,
-    RecallDatetime,
-    IsAssign
+    0 AS PlantID
 FROM TBL_TechnicalApproval_History
 ";
 
@@ -62,16 +57,16 @@ ON CONFLICT (technical_approval_workflow_id) DO UPDATE SET
         "Direct", // technical_approval_workflow_id
         "Direct", // event_id
         "Direct", // user_id
-        "Direct", // assign_date
+        "Direct", // assign_date (from CreatedDate)
         "Direct", // approval_level
-        "Fixed",  // created_by
-        "Fixed",  // created_date
+        "Direct", // created_by
+        "Direct", // created_date
         "Fixed",  // modified_by
         "Fixed",  // modified_date
         "Fixed",  // is_deleted
         "Fixed",  // deleted_by
         "Fixed",  // deleted_date
-        "Fixed"   // plant_id
+        "Direct"  // plant_id (selected as 0)
     };
 
     public override List<object> GetMappings()
@@ -81,10 +76,11 @@ ON CONFLICT (technical_approval_workflow_id) DO UPDATE SET
             new { source = "TechApprovalHistory_Id", logic = "TechApprovalHistory_Id -> technical_approval_workflow_id (Primary key, autoincrement)", target = "technical_approval_workflow_id" },
             new { source = "EVENT_ID", logic = "EVENT_ID -> event_id (Ref from Event Master table)", target = "event_id" },
             new { source = "ApprovalUserId", logic = "ApprovalUserId -> user_id (Ref from User Master table)", target = "user_id" },
-            new { source = "ActionDate", logic = "ActionDate -> assign_date (Direct)", target = "assign_date" },
+            new { source = "CreatedDate", logic = "CreatedDate -> assign_date (Direct)", target = "assign_date" },
             new { source = "LevelId", logic = "LevelId -> approval_level (Direct)", target = "approval_level" },
-            new { source = "-", logic = "created_by -> NULL (Fixed Default)", target = "created_by" },
-            new { source = "-", logic = "created_date -> NULL (Fixed Default)", target = "created_date" },
+            new { source = "CreatedBy", logic = "CreatedBy -> created_by (Direct)", target = "created_by" },
+            new { source = "CreatedDate", logic = "CreatedDate -> created_date (Direct)", target = "created_date" },
+            new { source = "PlantID", logic = "PlantID -> plant_id (Direct, selected as 0)", target = "plant_id" },
             new { source = "-", logic = "modified_by -> NULL (Fixed Default)", target = "modified_by" },
             new { source = "-", logic = "modified_date -> NULL (Fixed Default)", target = "modified_date" },
             new { source = "-", logic = "is_deleted -> false (Fixed Default)", target = "is_deleted" },
@@ -122,16 +118,11 @@ ON CONFLICT (technical_approval_workflow_id) DO UPDATE SET
             var techApprovalHistoryId = reader["TechApprovalHistory_Id"] ?? DBNull.Value;
             var eventId = reader["EVENT_ID"] ?? DBNull.Value;
             var approvalUserId = reader["ApprovalUserId"] ?? DBNull.Value;
-            var levelId = reader["LevelId"] ?? DBNull.Value;
-            var actionBy = reader["Actionby"] ?? DBNull.Value;
-            var actionDate = reader["ActionDate"] ?? DBNull.Value;
-            var actionRemark = reader["ActionRemark"] ?? DBNull.Value;
-            var actionStatus = reader["ActionStatus"] ?? DBNull.Value;
+            var levelId = reader["ApprovalLevel"] ?? reader["LevelId"] ?? DBNull.Value;
             var createdBy = reader["CreatedBy"] ?? DBNull.Value;
+            var assignDate = reader["AssignDate"] ?? reader["CreatedDate"] ?? DBNull.Value;
             var createdDate = reader["CreatedDate"] ?? DBNull.Value;
-            var recallUserId = reader["RecallUserId"] ?? DBNull.Value;
-            var recallDatetime = reader["RecallDatetime"] ?? DBNull.Value;
-            var isAssign = reader["IsAssign"] ?? DBNull.Value;
+            var plantId = reader["PlantID"] ?? DBNull.Value;
 
             // Validate required keys
             if (techApprovalHistoryId == DBNull.Value)
@@ -175,16 +166,16 @@ ON CONFLICT (technical_approval_workflow_id) DO UPDATE SET
                 ["technical_approval_workflow_id"] = techApprovalHistoryId,
                 ["event_id"] = eventId,
                 ["user_id"] = approvalUserId,
-                ["assign_date"] = actionDate,
+                ["assign_date"] = assignDate,
                 ["approval_level"] = levelId,
-                ["created_by"] = DBNull.Value,
-                ["created_date"] = DBNull.Value,
+                ["created_by"] = createdBy,
+                ["created_date"] = createdDate,
                 ["modified_by"] = DBNull.Value,
                 ["modified_date"] = DBNull.Value,
                 ["is_deleted"] = false,
                 ["deleted_by"] = DBNull.Value,
                 ["deleted_date"] = DBNull.Value,
-                ["plant_id"] = 0
+                ["plant_id"] = plantId
             };
 
             batch.Add(record);
