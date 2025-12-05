@@ -17,7 +17,7 @@ public class ARCApprovalAuthorityMigration : MigrationService
     protected override List<string> GetLogics()
     {
         return new List<string> {
-            "Direct", "Direct", "Direct", "Direct", "CreateDate->assign_date", "Direct", "Fixed: 0", "Fixed: DBNull", "Fixed: 0", "Fixed: DBNull", "Fixed: false", "Fixed: null", "Fixed: null"
+            "Direct", "Direct", "Direct", "Direct", "CreateDate->assign_date", "Direct", "Direct", "Direct", "Direct", "Direct", "Fixed: false", "Fixed: null", "Fixed: null"
         };
     }
 
@@ -36,10 +36,10 @@ public class ARCApprovalAuthorityMigration : MigrationService
             new { source = "AlternateApprovedBy", target = "assign_date" },
             new { source = "CreateDate", target = "assign_date" },
             new { source = "Level", target = "level" },
-            new { source = "-", target = "created_by" },
-            new { source = "-", target = "created_date" },
-            new { source = "-", target = "modified_by" },
-            new { source = "-", target = "modified_date" },
+            new { source = "CreatedBy", target = "created_by" },
+            new { source = "CreateDate", target = "created_date" },
+            new { source = "CreatedBy", target = "modified_by" },
+            new { source = "CreateDate", target = "modified_date" },
             new { source = "-", target = "is_deleted" },
             new { source = "-", target = "deleted_by" },
             new { source = "-", target = "deleted_date" }
@@ -82,10 +82,10 @@ public class ARCApprovalAuthorityMigration : MigrationService
                 ["approved_by"] = reader.IsDBNull(reader.GetOrdinal("ApprovedBy")) ? (object)DBNull.Value : Convert.ToInt32(reader["ApprovedBy"]),
                 ["assign_date"] = reader["CreateDate"] ?? (object)DBNull.Value,
                 ["level"] = reader.IsDBNull(reader.GetOrdinal("Level")) ? (object)DBNull.Value : Convert.ToInt32(reader["Level"]),
-                ["created_by"] = 0,
-                ["created_date"] = DBNull.Value,
-                ["modified_by"] = 0,
-                ["modified_date"] = DBNull.Value,
+                ["created_by"] = reader["CreatedBy"] ?? (object)DBNull.Value,
+                ["created_date"] = reader["CreateDate"] ?? (object)DBNull.Value,
+                ["modified_by"] = reader["CreatedBy"] ?? (object)DBNull.Value,
+                ["modified_date"] = reader["CreateDate"] ?? (object)DBNull.Value,
                 ["is_deleted"] = false,
                 ["deleted_by"] = DBNull.Value,
                 ["deleted_date"] = DBNull.Value
