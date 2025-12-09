@@ -460,6 +460,11 @@ public class MigrationController : Controller
             var mappings = _eventMigration.GetMappings();
             return Json(mappings);
         }
+        else if (table.ToLower() == "eventsetting")
+        {
+            var mappings = _eventSettingMigrationService.GetMappings();
+            return Json(mappings);
+        }
         else if (table.ToLower() == "tax")
         {
             var mappings = _taxMigration.GetMappings();      

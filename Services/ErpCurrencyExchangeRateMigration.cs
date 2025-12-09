@@ -1,9 +1,18 @@
 using Microsoft.Data.SqlClient;
 using Npgsql;
 using System.Data;
+using System.Text;
 
 namespace DataMigration.Services
 {
+    /// <summary>
+    /// Optimized migration for erp_currency_exchange_rate:
+    /// - No manual PK generation (let Postgres handle identity)
+    /// - Bulk COPY via NpgsqlBinaryImporter into a temp table
+    /// - Single MERGE using INSERT ... ON CONFLICT to perform upserts
+    /// - Transactional, batched, and tolerant to null/default values
+    /// - Normalizes timestamps to seconds to avoid microsecond equality problems
+    /// </summary>
     public class ErpCurrencyExchangeRateMigration
     {
         private readonly ILogger<ErpCurrencyExchangeRateMigration> _logger;
@@ -15,288 +24,359 @@ namespace DataMigration.Services
             _logger = logger;
         }
 
-        public List<object> GetMappings()
+        public List<object> GetMappings() => new List<object>
         {
-            return new List<object>
-            {
-                new { source = "RecId", target = "erp_currency_exchange_rate_id", logic = "RecId -> erp_currency_exchange_rate_id (Direct)", type = "int -> integer (NOT NULL)" },
-                new { source = "FromCurrency", target = "from_currency", logic = "FromCurrency -> from_currency (Direct, default 'USD' if NULL)", type = "varchar -> character varying(10) (NOT NULL)" },
-                new { source = "ToCurrency", target = "to_currency", logic = "ToCurrency -> to_currency (Direct, default 'INR' if NULL)", type = "varchar -> character varying(10) (NOT NULL)" },
-                new { source = "ExchangeRate", target = "exchange_rate", logic = "ExchangeRate -> exchange_rate (Direct, default 1.0 if NULL)", type = "decimal -> numeric (NOT NULL)" },
-                new { source = "FromDate", target = "valid_from", logic = "FromDate -> valid_from (Direct, default NOW() if NULL)", type = "datetime -> timestamp with time zone (NOT NULL)" },
-                new { source = "N/A (Generated)", target = "company_id", logic = "Auto-inserted for each company in company_master", type = "FK -> integer (NOT NULL)" },
-                new { source = "N/A", target = "created_by", logic = "Default: NULL", type = "integer (NULLABLE)" },
-                new { source = "N/A", target = "created_date", logic = "Default: CURRENT_TIMESTAMP", type = "timestamp with time zone (NULLABLE)" },
-                new { source = "N/A", target = "modified_by", logic = "Default: NULL", type = "integer (NULLABLE)" },
-                new { source = "N/A", target = "modified_date", logic = "Default: NULL", type = "timestamp with time zone (NULLABLE)" },
-                new { source = "N/A", target = "is_deleted", logic = "Default: false", type = "boolean (NULLABLE)" },
-                new { source = "N/A", target = "deleted_by", logic = "Default: NULL", type = "integer (NULLABLE)" },
-                new { source = "N/A", target = "deleted_date", logic = "Default: NULL", type = "timestamp with time zone (NULLABLE)" }
-            };
-        }
+            new { source = "RecId", target = "erp_currency_exchange_rate_id", logic = "IDENTITY handled by Postgres", type = "serial/identity" },
+            new { source = "FromCurrency", target = "from_currency", logic = "default 'USD' if NULL", type = "varchar -> character varying(10)" },
+            new { source = "ToCurrency", target = "to_currency", logic = "default 'INR' if NULL", type = "varchar -> character varying(10)" },
+            new { source = "ExchangeRate", target = "exchange_rate", logic = "default 1.0 if NULL or 0", type = "decimal -> numeric" },
+            new { source = "FromDate", target = "valid_from", logic = "default NOW() if NULL", type = "timestamp with time zone" },
+            new { source = "N/A (Generated)", target = "company_id", logic = "each company_id from company_master", type = "FK -> integer" }
+        };
 
-        public async Task<int> MigrateAsync()
+        /// <summary>
+        /// High-level migration flow:
+        /// 1. Read source rows from SQL Server.
+        /// 2. Expand rows per valid company into an in-memory list.
+        /// 3. Use PostgreSQL temporary table + COPY (binary) to load all rows in bulk.
+        /// 4. MERGE temp -> final table with INSERT ... ON CONFLICT (business key) DO UPDATE.
+        /// 5. Commit transaction.
+        /// </summary>
+        public async Task<int> MigrateAsync(CancellationToken cancellationToken = default)
         {
             var sqlConnectionString = _configuration.GetConnectionString("SqlServer");
             var pgConnectionString = _configuration.GetConnectionString("PostgreSql");
 
             if (string.IsNullOrEmpty(sqlConnectionString) || string.IsNullOrEmpty(pgConnectionString))
-            {
                 throw new InvalidOperationException("Database connection strings are not configured properly.");
-            }
 
-            var migratedRecords = 0;
-            var skippedRecords = 0;
-            var errors = new List<string>();
+            _logger.LogInformation("Starting optimized ErpCurrencyExchangeRate migration...");
 
-            try
+            // Read valid companies
+            var validCompanyIds = new List<int>();
+
+            await using (var pgForCompanies = new NpgsqlConnection(pgConnectionString))
             {
-                using var sqlConnection = new SqlConnection(sqlConnectionString);
-                using var pgConnection = new NpgsqlConnection(pgConnectionString);
-
-                await sqlConnection.OpenAsync();
-                await pgConnection.OpenAsync();
-
-                _logger.LogInformation("Starting ErpCurrencyExchangeRate migration...");
-
-                // Get valid company_ids from PostgreSQL
-                var validCompanyIds = new HashSet<int>();
-                using (var cmd = new NpgsqlCommand("SELECT company_id FROM company_master WHERE is_deleted = false", pgConnection))
-                using (var reader = await cmd.ExecuteReaderAsync())
+                await pgForCompanies.OpenAsync(cancellationToken);
+                await using var cmd = new NpgsqlCommand("SELECT company_id FROM company_master WHERE is_deleted = false or is_deleted is null", pgForCompanies);
+                await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
                 {
-                    while (await reader.ReadAsync())
-                    {
-                        validCompanyIds.Add(reader.GetInt32(0));
-                    }
-                }
-
-                if (!validCompanyIds.Any())
-                {
-                    _logger.LogError("No valid company_ids found in company_master table");
-                    return 0;
-                }
-
-                _logger.LogInformation($"Found {validCompanyIds.Count} companies. Will insert each record for all companies.");
-
-                // Fetch data from SQL Server
-                var sourceData = new List<(int RecId, string? FromCurrency, string? ToCurrency, decimal? ExchangeRate, DateTime? FromDate)>();
-                
-                using (var cmd = new SqlCommand(@"SELECT 
-                    RecId,
-                    FromCurrency,
-                    ToCurrency,
-                    ExchangeRate,
-                    FromDate
-                FROM TBL_CurrencyConversionMaster", sqlConnection))
-                using (var reader = await cmd.ExecuteReaderAsync())
-                {
-                    while (await reader.ReadAsync())
-                    {
-                        sourceData.Add((
-                            reader.GetInt32(0),
-                            reader.IsDBNull(1) ? null : reader.GetString(1),
-                            reader.IsDBNull(2) ? null : reader.GetString(2),
-                            reader.IsDBNull(3) ? null : reader.GetDecimal(3),
-                            reader.IsDBNull(4) ? null : reader.GetDateTime(4)
-                        ));
-                    }
-                }
-
-                _logger.LogInformation($"Found {sourceData.Count} records in source table");
-
-                if (sourceData.Count == 0)
-                {
-                    _logger.LogWarning("No data found in TBL_CurrencyConversionMaster");
-                    return 0;
-                }
-
-                // Generate unique IDs for each company combination
-                int recordCounter = 1;
-                int processedRecords = 0;
-
-                _logger.LogInformation($"Starting migration: {sourceData.Count} records × {validCompanyIds.Count} companies = {sourceData.Count * validCompanyIds.Count} total inserts");
-
-                foreach (var record in sourceData)
-                {
-                    processedRecords++;
-                    
-                    // Log progress every 100 records
-                    if (processedRecords % 100 == 0)
-                    {
-                        _logger.LogInformation($"Progress: {processedRecords}/{sourceData.Count} records processed");
-                    }
-                    
-                    // Handle NULL values with proper defaults (all target columns are NOT NULL)
-                    var fromCurrency = GetStringValue(record.FromCurrency, 10);
-                    if (string.IsNullOrWhiteSpace(fromCurrency))
-                    {
-                        fromCurrency = "USD"; // Default currency
-                        _logger.LogWarning($"RecId {record.RecId}: FromCurrency is NULL, using default 'USD'");
-                    }
-
-                    var toCurrency = GetStringValue(record.ToCurrency, 10);
-                    if (string.IsNullOrWhiteSpace(toCurrency))
-                    {
-                        toCurrency = "INR"; // Default currency
-                        _logger.LogWarning($"RecId {record.RecId}: ToCurrency is NULL, using default 'INR'");
-                    }
-
-                    var validFrom = GetDateTimeValue(record.FromDate) ?? DateTime.UtcNow;
-                    var exchangeRate = record.ExchangeRate ?? 1.0m;
-
-                    if (exchangeRate == 0)
-                    {
-                        exchangeRate = 1.0m; // Avoid zero exchange rate
-                        _logger.LogWarning($"RecId {record.RecId}: ExchangeRate is 0, using default 1.0");
-                    }
-
-                    // Insert for each company with unique IDs
-                    foreach (var companyId in validCompanyIds)
-                    {
-                        try
-                        {
-                            // Generate unique ID for each company combination
-                            int uniqueId = recordCounter++;
-
-                            // Check if record already exists
-                            int? existingRecordId = null;
-                            using (var checkCmd = new NpgsqlCommand(
-                                @"SELECT erp_currency_exchange_rate_id 
-                                  FROM erp_currency_exchange_rate 
-                                  WHERE from_currency = @FromCurrency 
-                                    AND to_currency = @ToCurrency 
-                                    AND company_id = @CompanyId
-                                    AND valid_from = @ValidFrom",
-                                pgConnection))
-                            {
-                                checkCmd.Parameters.AddWithValue("@FromCurrency", fromCurrency);
-                                checkCmd.Parameters.AddWithValue("@ToCurrency", toCurrency);
-                                checkCmd.Parameters.AddWithValue("@CompanyId", companyId);
-                                checkCmd.Parameters.AddWithValue("@ValidFrom", validFrom);
-                                var result = await checkCmd.ExecuteScalarAsync();
-                                if (result != null && result != DBNull.Value)
-                                {
-                                    existingRecordId = Convert.ToInt32(result);
-                                }
-                            }
-
-                            if (existingRecordId.HasValue)
-                            {
-                                // Update existing record
-                                using var updateCmd = new NpgsqlCommand(
-                                    @"UPDATE erp_currency_exchange_rate SET
-                                        exchange_rate = @ExchangeRate,
-                                        modified_by = NULL,
-                                        modified_date = CURRENT_TIMESTAMP
-                                    WHERE erp_currency_exchange_rate_id = @Id",
-                                    pgConnection);
-
-                                updateCmd.Parameters.AddWithValue("@Id", existingRecordId.Value);
-                                updateCmd.Parameters.AddWithValue("@ExchangeRate", exchangeRate);
-
-                                await updateCmd.ExecuteNonQueryAsync();
-                                _logger.LogDebug($"Updated record ID: {existingRecordId.Value} for company: {companyId}");
-                            }
-                            else
-                            {
-                                // Insert new record with unique ID
-                                using var insertCmd = new NpgsqlCommand(
-                                    @"INSERT INTO erp_currency_exchange_rate (
-                                        erp_currency_exchange_rate_id,
-                                        from_currency,
-                                        to_currency,
-                                        valid_from,
-                                        exchange_rate,
-                                        company_id,
-                                        created_by,
-                                        created_date,
-                                        modified_by,
-                                        modified_date,
-                                        is_deleted,
-                                        deleted_by,
-                                        deleted_date
-                                    ) VALUES (
-                                        @Id,
-                                        @FromCurrency,
-                                        @ToCurrency,
-                                        @ValidFrom,
-                                        @ExchangeRate,
-                                        @CompanyId,
-                                        NULL,
-                                        CURRENT_TIMESTAMP,
-                                        NULL,
-                                        NULL,
-                                        false,
-                                        NULL,
-                                        NULL
-                                    )
-                                    ON CONFLICT (erp_currency_exchange_rate_id) DO UPDATE SET
-                                        exchange_rate = EXCLUDED.exchange_rate,
-                                        modified_date = CURRENT_TIMESTAMP",
-                                    pgConnection);
-
-                                insertCmd.Parameters.AddWithValue("@Id", uniqueId);
-                                insertCmd.Parameters.AddWithValue("@FromCurrency", fromCurrency);
-                                insertCmd.Parameters.AddWithValue("@ToCurrency", toCurrency);
-                                insertCmd.Parameters.AddWithValue("@ValidFrom", validFrom);
-                                insertCmd.Parameters.AddWithValue("@ExchangeRate", exchangeRate);
-                                insertCmd.Parameters.AddWithValue("@CompanyId", companyId);
-
-                                int rowsAffected = await insertCmd.ExecuteNonQueryAsync();
-                                _logger.LogDebug($"Inserted record ID {uniqueId} for company {companyId}, RecId {record.RecId} (rows: {rowsAffected})");
-                            }
-
-                            migratedRecords++;
-                        }
-                        catch (PostgresException pgEx)
-                        {
-                            var errorMsg = $"RecId {record.RecId}, Company {companyId}: PostgreSQL Error {pgEx.SqlState} - {pgEx.Message}";
-                            _logger.LogWarning(errorMsg);
-                            errors.Add(errorMsg);
-                            skippedRecords++;
-                            continue;
-                        }
-                        catch (Exception ex)
-                        {
-                            var errorMsg = $"RecId {record.RecId}, Company {companyId}: {ex.Message}";
-                            _logger.LogError(errorMsg);
-                            errors.Add(errorMsg);
-                            skippedRecords++;
-                        }
-                    }
-                }
-
-                _logger.LogInformation($"Migration completed. Migrated: {migratedRecords}, Skipped: {skippedRecords}");
-                
-                if (errors.Any())
-                {
-                    _logger.LogWarning($"Encountered {errors.Count} errors during migration");
+                    validCompanyIds.Add(reader.GetInt32(0));
                 }
             }
-            catch (Exception ex)
+
+            if (!validCompanyIds.Any())
             {
-                _logger.LogError(ex, "Migration failed");
-                throw;
+                _logger.LogError("No valid companies found; aborting migration.");
+                return 0;
             }
 
-            return migratedRecords;
+            // Read source data once
+            var sourceData = new List<(int RecId, string? FromCurrency, string? ToCurrency, decimal? ExchangeRate, DateTime? FromDate)>();
+            await using (var sqlConn = new SqlConnection(sqlConnectionString))
+            {
+                await sqlConn.OpenAsync(cancellationToken);
+                var sql = @"SELECT RecId, FromCurrency, ToCurrency, FromDate, ExchangeRate FROM TBL_CurrencyConversionMaster";
+                await using var cmd = new SqlCommand(sql, sqlConn);
+                await using var rdr = await cmd.ExecuteReaderAsync(cancellationToken);
+                while (await rdr.ReadAsync(cancellationToken))
+                {
+                    sourceData.Add((
+                        rdr.GetInt32(0),
+                        rdr.IsDBNull(1) ? null : rdr.GetString(1),
+                        rdr.IsDBNull(2) ? null : rdr.GetString(2),
+                        rdr.IsDBNull(4) ? null : rdr.GetDecimal(4),
+                        rdr.IsDBNull(3) ? null : rdr.GetDateTime(3)
+                    ));
+                }
+            }
+
+            if (!sourceData.Any())
+            {
+                _logger.LogWarning("No source rows found; nothing to migrate.");
+                return 0;
+            }
+
+            // Prepare flattened rows to bulk-insert
+            var flattened = new List<TempRateRow>(capacity: sourceData.Count * validCompanyIds.Count);
+
+            foreach (var src in sourceData)
+            {
+                var fromCurrency = NormalizeCurrency(src.FromCurrency, "USD");
+                var toCurrency = NormalizeCurrency(src.ToCurrency, "INR");
+                var rate = src.ExchangeRate.HasValue && src.ExchangeRate.Value != 0m ? src.ExchangeRate.Value : 1.0m;
+                var validFrom = NormalizeTimestamp(src.FromDate ?? DateTime.UtcNow);
+
+                foreach (var companyId in validCompanyIds)
+                {
+                    flattened.Add(new TempRateRow
+                    {
+                        FromCurrency = fromCurrency,
+                        ToCurrency = toCurrency,
+                        ValidFrom = validFrom,
+                        ExchangeRate = rate,
+                        CompanyId = companyId
+                    });
+                }
+            }
+
+            _logger.LogInformation($"Prepared {flattened.Count} rows for bulk load ({sourceData.Count} source × {validCompanyIds.Count} companies)");
+
+            // Bulk load into a temp table using COPY (binary) and then MERGE
+            var migratedCount = 0;
+            await using (var pgConn = new NpgsqlConnection(pgConnectionString))
+            {
+                await pgConn.OpenAsync(cancellationToken);
+
+                // Use a transaction to ensure atomicity
+                await using var tx = await pgConn.BeginTransactionAsync(cancellationToken);
+
+                // Create temporary table (session-local) - exclude PK (let final table manage identity)
+                var createTempSql = @"
+                    CREATE TEMP TABLE tmp_erp_rates (
+                        from_currency varchar(10) NOT NULL,
+                        to_currency varchar(10) NOT NULL,
+                        valid_from timestamptz NOT NULL,
+                        exchange_rate numeric NOT NULL,
+                        company_id integer NOT NULL
+                    ) ON COMMIT DROP;";
+
+                await using (var createCmd = new NpgsqlCommand(createTempSql, pgConn, tx))
+                {
+                    await createCmd.ExecuteNonQueryAsync(cancellationToken);
+                }
+
+                // Bulk COPY (binary) into temp table
+                // Use NpgsqlBinaryImporter for speed
+                await using (var importer = pgConn.BeginBinaryImport("COPY tmp_erp_rates (from_currency, to_currency, valid_from, exchange_rate, company_id) FROM STDIN (FORMAT BINARY)"))
+                {
+                    foreach (var row in flattened)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        importer.StartRow();
+                        importer.Write(row.FromCurrency, NpgsqlTypes.NpgsqlDbType.Varchar);
+                        importer.Write(row.ToCurrency, NpgsqlTypes.NpgsqlDbType.Varchar);
+                        importer.Write(row.ValidFrom, NpgsqlTypes.NpgsqlDbType.TimestampTz);
+                        importer.Write(row.ExchangeRate, NpgsqlTypes.NpgsqlDbType.Numeric);
+                        importer.Write(row.CompanyId, NpgsqlTypes.NpgsqlDbType.Integer);
+                    }
+
+                    await importer.CompleteAsync(cancellationToken);
+                }
+
+                _logger.LogInformation("Bulk COPY into temporary table completed");
+
+                // Check if unique constraint exists, if not create it
+                var checkConstraintSql = @"
+                    SELECT COUNT(*)
+                    FROM pg_constraint
+                    WHERE conname = 'uq_erp_currency_exchange_rate_business_key'
+                      AND conrelid = 'erp_currency_exchange_rate'::regclass;";
+
+                int constraintExists = 0;
+                await using (var checkCmd = new NpgsqlCommand(checkConstraintSql, pgConn, tx))
+                {
+                    var result = await checkCmd.ExecuteScalarAsync(cancellationToken);
+                    if (result != null && result != DBNull.Value)
+                        constraintExists = Convert.ToInt32(result);
+                }
+
+                bool canUseBulkMerge = false;
+
+                if (constraintExists == 0)
+                {
+                    _logger.LogInformation("Creating unique constraint on business key (from_currency, to_currency, valid_from, company_id)...");
+                    
+                    var createConstraintSql = @"
+                        ALTER TABLE erp_currency_exchange_rate 
+                        ADD CONSTRAINT uq_erp_currency_exchange_rate_business_key 
+                        UNIQUE (from_currency, to_currency, valid_from, company_id);";
+                    
+                    try
+                    {
+                        await using var constraintCmd = new NpgsqlCommand(createConstraintSql, pgConn, tx);
+                        await constraintCmd.ExecuteNonQueryAsync(cancellationToken);
+                        _logger.LogInformation("✓ Unique constraint created successfully");
+                        canUseBulkMerge = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning($"⚠️ Could not create constraint (may have duplicates): {ex.Message}");
+                        _logger.LogWarning("Will use slower row-by-row upsert instead of bulk ON CONFLICT");
+                        canUseBulkMerge = false;
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("✓ Unique constraint already exists");
+                    canUseBulkMerge = true;
+                }
+
+                // If we can't use bulk merge, fall back to row-by-row
+                if (!canUseBulkMerge)
+                {
+                    await DoRowByRowUpsertAsync(pgConn, tx, flattened, cancellationToken);
+                    await tx.CommitAsync(cancellationToken);
+                    return flattened.Count;
+                }
+
+                // Merge temp data into final table with single statement
+                var mergeSql = @"
+                    INSERT INTO erp_currency_exchange_rate (
+                        from_currency, to_currency, valid_from, exchange_rate, company_id, created_date, is_deleted
+                    )
+                    SELECT from_currency, to_currency, valid_from, exchange_rate, company_id, CURRENT_TIMESTAMP, false
+                    FROM tmp_erp_rates
+                    ON CONFLICT (from_currency, to_currency, valid_from, company_id)
+                    DO UPDATE SET
+                        exchange_rate = EXCLUDED.exchange_rate,
+                        modified_date = CURRENT_TIMESTAMP;
+
+                    -- return number of rows affected (inserted + updated)
+                    SELECT (SELECT COUNT(*) FROM tmp_erp_rates) AS rows_in_tmp;";
+
+                int rowsInTmp = 0;
+                await using (var mergeCmd = new NpgsqlCommand(mergeSql, pgConn, tx))
+                {
+                    // ExecuteScalar will return the final SELECT value (rows_in_tmp)
+                    var result = await mergeCmd.ExecuteScalarAsync(cancellationToken);
+                    if (result != null && result != DBNull.Value)
+                        rowsInTmp = Convert.ToInt32(result);
+                }
+
+                await tx.CommitAsync(cancellationToken);
+
+                migratedCount = rowsInTmp;
+                _logger.LogInformation($"Merge completed. Rows merged: {migratedCount}");
+            }
+
+            return migratedCount;
         }
 
-        private string GetStringValue(string? value, int maxLength)
+        private static string NormalizeCurrency(string? input, string defaultVal)
         {
-            if (string.IsNullOrWhiteSpace(value))
-                return string.Empty;
+            if (string.IsNullOrWhiteSpace(input))
+                return defaultVal;
 
-            value = value.Trim();
-            return value.Length > maxLength ? value.Substring(0, maxLength) : value;
+            var trimmed = input.Trim();
+            return trimmed.Length > 10 ? trimmed.Substring(0, 10) : trimmed;
         }
 
-        private DateTime? GetDateTimeValue(DateTime? value)
+        private static DateTime NormalizeTimestamp(DateTime input)
         {
-            if (!value.HasValue)
-                return null;
+            // Force UTC and truncate to seconds to avoid microsecond precision mismatches
+            var utc = DateTime.SpecifyKind(input, DateTimeKind.Utc);
+            return new DateTime(utc.Year, utc.Month, utc.Day, utc.Hour, utc.Minute, utc.Second, DateTimeKind.Utc);
+        }
 
-            return DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
+        /// <summary>
+        /// Fallback method: row-by-row upsert when unique constraint doesn't exist
+        /// Slower but more tolerant to duplicate data
+        /// </summary>
+        private async Task DoRowByRowUpsertAsync(
+            NpgsqlConnection pgConn, 
+            NpgsqlTransaction tx, 
+            List<TempRateRow> rows, 
+            CancellationToken cancellationToken)
+        {
+            _logger.LogInformation($"Performing row-by-row upsert for {rows.Count} rows...");
+            
+            int inserted = 0;
+            int updated = 0;
+            int skipped = 0;
+            
+            var checkSql = @"
+                SELECT erp_currency_exchange_rate_id 
+                FROM erp_currency_exchange_rate 
+                WHERE from_currency = @from_currency 
+                  AND to_currency = @to_currency 
+                  AND valid_from = @valid_from 
+                  AND company_id = @company_id 
+                LIMIT 1";
+            
+            var insertSql = @"
+                INSERT INTO erp_currency_exchange_rate (
+                    from_currency, to_currency, valid_from, exchange_rate, company_id, 
+                    created_date, is_deleted
+                ) VALUES (
+                    @from_currency, @to_currency, @valid_from, @exchange_rate, @company_id,
+                    CURRENT_TIMESTAMP, false
+                )";
+            
+            var updateSql = @"
+                UPDATE erp_currency_exchange_rate 
+                SET exchange_rate = @exchange_rate, 
+                    modified_date = CURRENT_TIMESTAMP 
+                WHERE erp_currency_exchange_rate_id = @id";
+            
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (i % 100 == 0)
+                {
+                    _logger.LogInformation($"Progress: {i}/{rows.Count} rows processed (I:{inserted}, U:{updated}, S:{skipped})");
+                }
+                
+                cancellationToken.ThrowIfCancellationRequested();
+                
+                var row = rows[i];
+                
+                try
+                {
+                    // Check if exists
+                    int? existingId = null;
+                    await using (var checkCmd = new NpgsqlCommand(checkSql, pgConn, tx))
+                    {
+                        checkCmd.Parameters.AddWithValue("@from_currency", row.FromCurrency);
+                        checkCmd.Parameters.AddWithValue("@to_currency", row.ToCurrency);
+                        checkCmd.Parameters.AddWithValue("@valid_from", row.ValidFrom);
+                        checkCmd.Parameters.AddWithValue("@company_id", row.CompanyId);
+                        
+                        var result = await checkCmd.ExecuteScalarAsync(cancellationToken);
+                        if (result != null && result != DBNull.Value)
+                            existingId = Convert.ToInt32(result);
+                    }
+                    
+                    if (existingId.HasValue)
+                    {
+                        // Update
+                        await using var updateCmd = new NpgsqlCommand(updateSql, pgConn, tx);
+                        updateCmd.Parameters.AddWithValue("@id", existingId.Value);
+                        updateCmd.Parameters.AddWithValue("@exchange_rate", row.ExchangeRate);
+                        await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+                        updated++;
+                    }
+                    else
+                    {
+                        // Insert
+                        await using var insertCmd = new NpgsqlCommand(insertSql, pgConn, tx);
+                        insertCmd.Parameters.AddWithValue("@from_currency", row.FromCurrency);
+                        insertCmd.Parameters.AddWithValue("@to_currency", row.ToCurrency);
+                        insertCmd.Parameters.AddWithValue("@valid_from", row.ValidFrom);
+                        insertCmd.Parameters.AddWithValue("@exchange_rate", row.ExchangeRate);
+                        insertCmd.Parameters.AddWithValue("@company_id", row.CompanyId);
+                        await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+                        inserted++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"Failed to upsert row {i}: {ex.Message}");
+                    skipped++;
+                }
+            }
+            
+            _logger.LogInformation($"✓ Row-by-row upsert completed. Inserted: {inserted}, Updated: {updated}, Skipped: {skipped}");
+        }
+
+        private class TempRateRow
+        {
+            public string FromCurrency { get; set; } = string.Empty;
+            public string ToCurrency { get; set; } = string.Empty;
+            public DateTime ValidFrom { get; set; }
+            public decimal ExchangeRate { get; set; }
+            public int CompanyId { get; set; }
         }
     }
 }

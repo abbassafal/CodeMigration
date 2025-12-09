@@ -4,6 +4,10 @@ using System.Data;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace DataMigration.Services;
 
 public class EventSettingMigrationService
 {
@@ -28,7 +32,7 @@ public class EventSettingMigrationService
             new { source = "IsAutoExtendedEnable", target = "auto_extended_enable", type = "int -> boolean" },
             new { source = "NoofTimesAutoExtended", target = "no_of_times_auto_extended", type = "int -> integer" },
             new { source = "AutoExtendedMinutes", target = "auto_extended_minutes", type = "int -> integer" },
-            new { source = "ApplyExtendedTimes", target = "apply_extended_times", type = "int -> boolean" },
+            new { source = "ApplyExtendedTimes", target = "apply_extended_times", type = "int -> integer" },
             new { source = "GREENPERCENTAGE", target = "green_percentage", type = "decimal -> numeric" },
             new { source = "YELLOWPERCENTAGE", target = "yellow_percentage", type = "decimal -> numeric" },
             new { source = "IsItemLevelRankShow", target = "show_item_level_rank", type = "int -> boolean" },
@@ -51,8 +55,8 @@ public class EventSettingMigrationService
             new { source = "default: 0", target = "created_by", type = "integer" },
             new { source = "default: UTC now", target = "created_date", type = "timestamp with time zone" },
             new { source = "default: 0", target = "lot_level_target_price", type = "numeric" },
-            new { source = "MinBidMode", target = "max_lot_bid_type", type = "int -> integer" },
-            new { source = "MaxBidMode", target = "min_lot_bid_type", type = "int -> integer" },
+            new { source = "MinBidMode", target = "max_lot_bid_type", type = "int -> text" },
+            new { source = "MaxBidMode", target = "min_lot_bid_type", type = "int -> text" },
             new { source = "default: false", target = "allow_currency_selection", type = "boolean" }
         };
     }
@@ -99,7 +103,7 @@ public class EventSettingMigrationService
                 Bool(reader["IsAutoExtendedEnable"]),              // auto_extended_enable (boolean)
                 FormatInteger(reader["NoofTimesAutoExtended"]),    // no_of_times_auto_extended (integer, NOT NULL)
                 FormatInteger(reader["AutoExtendedMinutes"]),      // auto_extended_minutes (integer, NOT NULL)
-                Bool(reader["ApplyExtendedTimes"]),                // apply_extended_times (boolean)
+                FormatInteger(reader["ApplyExtendedTimes"]),       // apply_extended_times (integer, NOT NULL)
                 FormatNumeric(reader["GREENPERCENTAGE"]),          // green_percentage (numeric)
                 FormatNumeric(reader["YELLOWPERCENTAGE"]),         // yellow_percentage (numeric)
                 Bool(reader["IsItemLevelRankShow"]),               // show_item_level_rank (boolean)
@@ -127,8 +131,8 @@ public class EventSettingMigrationService
                 @"\N",                                             // deleted_date (timestamp, nullable)
                 "f",                                               // is_deleted (boolean)
                 "0",                                               // lot_level_target_price (numeric)
-                FormatInteger(reader["MinBidMode"]),               // max_lot_bid_type (integer)
-                FormatInteger(reader["MaxBidMode"]),               // min_lot_bid_type (integer)
+                FormatValue(reader["MinBidMode"]),                 // max_lot_bid_type (text)
+                FormatValue(reader["MaxBidMode"]),                 // min_lot_bid_type (text)
                 "f"                                                // allow_currency_selection (boolean)
             };
             var row = string.Join("|", fields);

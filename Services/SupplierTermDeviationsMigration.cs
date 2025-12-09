@@ -229,12 +229,19 @@ public class SupplierTermDeviationsMigration : MigrationService
                     }
                 }
 
+                // Ensure deviation_remarks is never NULL (NOT NULL constraint)
+                string deviationRemarksValue = string.Empty;
+                if (deviationRemarks != DBNull.Value && deviationRemarks != null)
+                {
+                    deviationRemarksValue = deviationRemarks.ToString() ?? string.Empty;
+                }
+
                 var record = new Dictionary<string, object>
                 {
                     ["supplier_term_deviation_id"] = vendorDeviationTrnIdValue,
                     ["supplier_term_id"] = vendorDeviationMstIdValue,
                     ["event_id"] = supplierTermData.EventId.HasValue ? (object)supplierTermData.EventId.Value : DBNull.Value,
-                    ["deviation_remarks"] = deviationRemarks ?? DBNull.Value,
+                    ["deviation_remarks"] = deviationRemarksValue, // Never NULL, use empty string if missing
                     ["user_id"] = userId,
                     ["supplier_id"] = supplierId,
                     ["created_by"] = DBNull.Value,

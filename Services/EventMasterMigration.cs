@@ -580,9 +580,6 @@ public class EventMasterMigration : MigrationService
                     {
                         // Insert event_master records using COPY
                         await InsertEventMasterBatchAsync(pgConn, batch, now);
-                        
-                        // Insert event_setting records using COPY
-                        await InsertEventSettingBatchAsync(pgConn, batch, now);
 
                         Interlocked.Add(ref insertedCount, batch.Count);
 
@@ -957,115 +954,296 @@ public class EventMasterMigration : MigrationService
 
     private async Task InsertEventMasterBatchAsync(NpgsqlConnection pgConn, List<ProcessedEventRecord> batch, DateTime now)
     {
-        // Use TEXT format instead of BINARY - more robust for string encoding
-        // Use pipe (|) as delimiter to avoid conflicts with tab characters in data
-        // Note: NULL representation \N is the default for TEXT format, no need to specify
-        var copyCommand = @"COPY event_master (
-            event_id, event_code, event_name, event_description, round, event_type, 
-            event_status, parent_id, price_bid_template, is_standalone, pricing_status, 
-            event_extended, event_currency_id, disable_mail_in_next_round, company_id,
-            technical_approval_send_date, technical_approval_approved_date, 
-            technical_approval_status, created_by, created_date
-        ) FROM STDIN (FORMAT TEXT, DELIMITER '|')";
-
-        using var writer = await pgConn.BeginTextImportAsync(copyCommand);
-
-        foreach (var record in batch)
+        var tempTableName = $"temp_event_master_{Guid.NewGuid():N}";
+        
+        try
         {
-            // Build pipe-delimited row using string array to preserve NULL markers
-            var fields = new string[]
-            {
-                record.EventId.ToString(),
-                EscapeTextCopy(SanitizeString(record.EventCode)),
-                EscapeTextCopy(SanitizeString(record.EventName)),
-                EscapeTextCopy(SanitizeString(record.EventDescription)),
-                record.Round.ToString(),
-                EscapeTextCopy(SanitizeString(record.EventType)),
-                EscapeTextCopy(SanitizeString(record.EventStatus)),
-                record.ParentId.ToString(),
-                EscapeTextCopy(SanitizeString(record.PriceBidTemplate)),
-                record.IsStandalone ? "t" : "f",
-                record.PricingStatus ? "t" : "f",
-                record.EventExtended ? "t" : "f",
-                record.EventCurrencyId.ToString(),
-                record.DisableMailInNextRound ? "t" : "f",
-                record.CompanyId.ToString(),
-                FormatDateTime(record.TechnicalApprovalSendDate),
-                FormatDateTime(record.TechnicalApprovalApprovedDate),
-                record.TechnicalApprovalStatus != null ? EscapeTextCopy(SanitizeString(record.TechnicalApprovalStatus)) : @"\N",
-                record.CreatedBy.HasValue ? record.CreatedBy.Value.ToString() : "0",
-                record.CreatedDate.HasValue ? FormatDateTime(record.CreatedDate) : now.ToString("yyyy-MM-dd HH:mm:ss.ffffff+00")
-            };
+            // Create a temporary table for COPY, then use INSERT ... ON CONFLICT
+            // NOTE: No "ON COMMIT DROP" - we'll manually drop it to ensure it exists for the entire operation
+            var createTempTableCmd = $@"
+                CREATE TEMP TABLE {tempTableName} (LIKE event_master INCLUDING DEFAULTS)";
             
-            var row = string.Join("|", fields);
-            await writer.WriteLineAsync(row);
+            using (var cmd = new NpgsqlCommand(createTempTableCmd, pgConn))
+            {
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // Use BINARY COPY to load data into temp table
+            var copyCommand = $@"COPY {tempTableName} (
+                event_id, event_code, event_name, event_description, round, event_type, 
+                event_status, parent_id, price_bid_template, is_standalone, pricing_status, 
+                event_extended, event_currency_id, disable_mail_in_next_round, company_id,
+                technical_approval_send_date, technical_approval_approved_date, 
+                technical_approval_status, created_by, created_date
+            ) FROM STDIN (FORMAT BINARY)";
+
+            using (var writer = await pgConn.BeginBinaryImportAsync(copyCommand))
+            {
+                foreach (var record in batch)
+                {
+                    await writer.StartRowAsync();
+                    await writer.WriteAsync(record.EventId, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(SanitizeString(record.EventCode), NpgsqlDbType.Text);
+                    await writer.WriteAsync(SanitizeString(record.EventName), NpgsqlDbType.Text);
+                    await writer.WriteAsync(SanitizeString(record.EventDescription), NpgsqlDbType.Text);
+                    await writer.WriteAsync(record.Round, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(SanitizeString(record.EventType), NpgsqlDbType.Text);
+                    await writer.WriteAsync(SanitizeString(record.EventStatus), NpgsqlDbType.Text);
+                    await writer.WriteAsync(record.ParentId, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(SanitizeString(record.PriceBidTemplate), NpgsqlDbType.Text);
+                    await writer.WriteAsync(record.IsStandalone, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.PricingStatus, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.EventExtended, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.EventCurrencyId, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(record.DisableMailInNextRound, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.CompanyId, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(record.TechnicalApprovalSendDate, NpgsqlDbType.TimestampTz);
+                    await writer.WriteAsync(record.TechnicalApprovalApprovedDate, NpgsqlDbType.TimestampTz);
+                    await writer.WriteAsync(record.TechnicalApprovalStatus, NpgsqlDbType.Text);
+                    await writer.WriteAsync(record.CreatedBy ?? 0, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(record.CreatedDate ?? now, NpgsqlDbType.TimestampTz);
+                }
+                
+                await writer.CompleteAsync();
+            }
+
+            // Insert from temp table with ON CONFLICT DO UPDATE
+            var upsertCmd = $@"
+                INSERT INTO event_master (
+                    event_id, event_code, event_name, event_description, round, event_type, 
+                    event_status, parent_id, price_bid_template, is_standalone, pricing_status, 
+                    event_extended, event_currency_id, disable_mail_in_next_round, company_id,
+                    technical_approval_send_date, technical_approval_approved_date, 
+                    technical_approval_status, created_by, created_date
+                )
+                SELECT 
+                    event_id, event_code, event_name, event_description, round, event_type, 
+                    event_status, parent_id, price_bid_template, is_standalone, pricing_status, 
+                    event_extended, event_currency_id, disable_mail_in_next_round, company_id,
+                    technical_approval_send_date, technical_approval_approved_date, 
+                    technical_approval_status, created_by, created_date
+                FROM {tempTableName}
+                ON CONFLICT (event_id) DO UPDATE SET
+                    event_code = EXCLUDED.event_code,
+                    event_name = EXCLUDED.event_name,
+                    event_description = EXCLUDED.event_description,
+                    round = EXCLUDED.round,
+                    event_type = EXCLUDED.event_type,
+                    event_status = EXCLUDED.event_status,
+                    parent_id = EXCLUDED.parent_id,
+                    price_bid_template = EXCLUDED.price_bid_template,
+                    is_standalone = EXCLUDED.is_standalone,
+                    pricing_status = EXCLUDED.pricing_status,
+                    event_extended = EXCLUDED.event_extended,
+                    event_currency_id = EXCLUDED.event_currency_id,
+                    disable_mail_in_next_round = EXCLUDED.disable_mail_in_next_round,
+                    company_id = EXCLUDED.company_id,
+                    technical_approval_send_date = EXCLUDED.technical_approval_send_date,
+                    technical_approval_approved_date = EXCLUDED.technical_approval_approved_date,
+                    technical_approval_status = EXCLUDED.technical_approval_status,
+                    created_by = EXCLUDED.created_by,
+                    created_date = EXCLUDED.created_date";
+            
+            using (var cmd = new NpgsqlCommand(upsertCmd, pgConn))
+            {
+                cmd.CommandTimeout = 300;
+                await cmd.ExecuteNonQueryAsync();
+            }
+            
+            _logger.LogInformation($"✓ Successfully upserted {batch.Count} event_master records via BINARY COPY + ON CONFLICT");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"❌ Failed to insert event_master batch: {ex.Message}");
+            if (batch.Count > 0)
+            {
+                _logger.LogError($"   First record: EventId={batch[0].EventId}, EventCode='{batch[0].EventCode}'");
+            }
+            throw;
+        }
+        finally
+        {
+            // Clean up the temp table
+            try
+            {
+                using var dropCmd = new NpgsqlCommand($"DROP TABLE IF EXISTS {tempTableName}", pgConn);
+                await dropCmd.ExecuteNonQueryAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"⚠️ Failed to drop temp table {tempTableName}: {ex.Message}");
+            }
         }
     }
 
+    /* COMMENTED OUT - Event settings migration moved to separate EventSettingMigrationService
     private async Task InsertEventSettingBatchAsync(NpgsqlConnection pgConn, List<ProcessedEventRecord> batch, DateTime now)
     {
-        // Use TEXT format with pipe delimiter (single-byte character)
-        // Note: NULL representation \N is the default for TEXT format, no need to specify
-        var copyCommand = @"COPY event_setting (
-            event_id, event_mode, tie_prevent_lot, tie_prevent_item, target_price_applicable,
-            auto_extended_enable, no_of_times_auto_extended, auto_extended_minutes, 
-            apply_extended_times, green_percentage, yellow_percentage, show_item_level_rank,
-            show_lot_level_rank, basic_price_applicable, basic_price_validation_mandatory,
-            min_max_bid_applicable, show_lower_bid, apply_all_settings_in_price_bid,
-            min_lot_auction_bid_value, max_lot_auction_bid_value, configure_lot_level_auction,
-            lot_level_basic_price, price_bid_attachment_mandatory, discount_applicable,
-            gst_mandatory, technical_attachment_mandatory, proposed_qty, ready_stock_mandatory,
-            created_by, created_date, lot_level_target_price, max_lot_bid_type, 
-            min_lot_bid_type, allow_currency_selection
-        ) FROM STDIN (FORMAT TEXT, DELIMITER '|')";
-
-        using var writer = await pgConn.BeginTextImportAsync(copyCommand);
-
-        foreach (var record in batch)
+        var tempTableName = $"temp_event_setting_{Guid.NewGuid():N}";
+        
+        try
         {
-            // Build pipe-delimited row using string array to preserve formatting
-            var fields = new string[]
-            {
-                record.EventId.ToString(),
-                EscapeTextCopy(SanitizeString(record.EventMode)),
-                record.TiePreventLot ? "t" : "f",
-                record.TiePreventItem ? "t" : "f",
-                record.TargetPriceApplicable ? "t" : "f",
-                record.AutoExtendedEnable ? "t" : "f",
-                record.NoofTimesAutoExtended.ToString(),
-                record.AutoExtendedMinutes.ToString(),
-                record.ApplyExtendedTimes ? "t" : "f",
-                record.GreenPercentage.ToString(),
-                record.YellowPercentage.ToString(),
-                record.ShowItemLevelRank ? "t" : "f",
-                record.ShowLotLevelRank ? "t" : "f",
-                record.BasicPriceApplicable ? "t" : "f",
-                record.BasicPriceValidationMandatory ? "t" : "f",
-                record.MinMaxBidApplicable ? "t" : "f",
-                record.ShowLowerBid ? "t" : "f",
-                record.ApplyAllSettingsInPriceBid ? "t" : "f",
-                record.MinLotAuctionBidValue.ToString(),
-                record.MaxLotAuctionBidValue.ToString(),
-                record.ConfigureLotLevelAuction ? "t" : "f",
-                record.LotLevelBasicPrice.ToString(),
-                record.PriceBidAttachmentMandatory ? "t" : "f",
-                record.DiscountApplicable ? "t" : "f",
-                record.GstMandatory ? "t" : "f",
-                record.TechnicalAttachmentMandatory ? "t" : "f",
-                record.ProposedQty ? "t" : "f",
-                record.ReadyStockMandatory ? "t" : "f",
-                "0",
-                now.ToString("yyyy-MM-dd HH:mm:ss.ffffff+00"),
-                "0",
-                record.MaxLotBidType.ToString(),
-                record.MinLotBidType.ToString(),
-                "f"
-            };
+            // Create a temporary table for COPY, then use INSERT ... ON CONFLICT
+            var createTempTableCmd = $@"
+                CREATE TEMP TABLE {tempTableName} (LIKE event_setting INCLUDING DEFAULTS)";
             
-            var row = string.Join("|", fields);
-            await writer.WriteLineAsync(row);
+            using (var cmd = new NpgsqlCommand(createTempTableCmd, pgConn))
+            {
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            // Use BINARY format to load data into temp table
+            var copyCommand = $@"COPY {tempTableName} (
+                event_id, event_mode, tie_prevent_lot, tie_prevent_item, target_price_applicable,
+                auto_extended_enable, no_of_times_auto_extended, auto_extended_minutes, 
+                apply_extended_times, green_percentage, yellow_percentage, show_item_level_rank,
+                show_lot_level_rank, basic_price_applicable, basic_price_validation_mandatory,
+                min_max_bid_applicable, show_lower_bid, apply_all_settings_in_price_bid,
+                min_lot_auction_bid_value, max_lot_auction_bid_value, configure_lot_level_auction,
+                lot_level_basic_price, price_bid_attachment_mandatory, discount_applicable,
+                gst_mandatory, technical_attachment_mandatory, proposed_qty, ready_stock_mandatory,
+                created_by, created_date, lot_level_target_price, max_lot_bid_type, 
+                min_lot_bid_type, allow_currency_selection
+            ) FROM STDIN (FORMAT BINARY)";
+
+            using (var writer = await pgConn.BeginBinaryImportAsync(copyCommand))
+            {
+                foreach (var record in batch)
+                {
+                    await writer.StartRowAsync();
+                    await writer.WriteAsync(record.EventId, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(SanitizeString(record.EventMode), NpgsqlDbType.Text);
+                    await writer.WriteAsync(record.TiePreventLot, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.TiePreventItem, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.TargetPriceApplicable, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.AutoExtendedEnable, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.NoofTimesAutoExtended, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(record.AutoExtendedMinutes, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(record.ApplyExtendedTimes, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.GreenPercentage, NpgsqlDbType.Numeric);
+                    await writer.WriteAsync(record.YellowPercentage, NpgsqlDbType.Numeric);
+                    await writer.WriteAsync(record.ShowItemLevelRank, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.ShowLotLevelRank, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.BasicPriceApplicable, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.BasicPriceValidationMandatory, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.MinMaxBidApplicable, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.ShowLowerBid, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.ApplyAllSettingsInPriceBid, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.MinLotAuctionBidValue, NpgsqlDbType.Numeric);
+                    await writer.WriteAsync(record.MaxLotAuctionBidValue, NpgsqlDbType.Numeric);
+                    await writer.WriteAsync(record.ConfigureLotLevelAuction, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.LotLevelBasicPrice, NpgsqlDbType.Numeric);
+                    await writer.WriteAsync(record.PriceBidAttachmentMandatory, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.DiscountApplicable, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.GstMandatory, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.TechnicalAttachmentMandatory, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.ProposedQty, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.ReadyStockMandatory, NpgsqlDbType.Boolean);
+                    await writer.WriteAsync(record.CreatedBy ?? 0, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(record.CreatedDate ?? now, NpgsqlDbType.TimestampTz);
+                    await writer.WriteAsync(0m, NpgsqlDbType.Numeric); // lot_level_target_price (numeric, not integer)
+                    await writer.WriteAsync(record.MaxLotBidType, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(record.MinLotBidType, NpgsqlDbType.Integer);
+                    await writer.WriteAsync(false, NpgsqlDbType.Boolean); // allow_currency_selection
+                }
+                
+                await writer.CompleteAsync();
+            }
+
+            // Insert from temp table with ON CONFLICT DO UPDATE
+            var upsertCmd = $@"
+                INSERT INTO event_setting (
+                    event_id, event_mode, tie_prevent_lot, tie_prevent_item, target_price_applicable,
+                    auto_extended_enable, no_of_times_auto_extended, auto_extended_minutes, 
+                    apply_extended_times, green_percentage, yellow_percentage, show_item_level_rank,
+                    show_lot_level_rank, basic_price_applicable, basic_price_validation_mandatory,
+                    min_max_bid_applicable, show_lower_bid, apply_all_settings_in_price_bid,
+                    min_lot_auction_bid_value, max_lot_auction_bid_value, configure_lot_level_auction,
+                    lot_level_basic_price, price_bid_attachment_mandatory, discount_applicable,
+                    gst_mandatory, technical_attachment_mandatory, proposed_qty, ready_stock_mandatory,
+                    created_by, created_date, lot_level_target_price, max_lot_bid_type, 
+                    min_lot_bid_type, allow_currency_selection
+                )
+                SELECT 
+                    event_id, event_mode, tie_prevent_lot, tie_prevent_item, target_price_applicable,
+                    auto_extended_enable, no_of_times_auto_extended, auto_extended_minutes, 
+                    apply_extended_times, green_percentage, yellow_percentage, show_item_level_rank,
+                    show_lot_level_rank, basic_price_applicable, basic_price_validation_mandatory,
+                    min_max_bid_applicable, show_lower_bid, apply_all_settings_in_price_bid,
+                    min_lot_auction_bid_value, max_lot_auction_bid_value, configure_lot_level_auction,
+                    lot_level_basic_price, price_bid_attachment_mandatory, discount_applicable,
+                    gst_mandatory, technical_attachment_mandatory, proposed_qty, ready_stock_mandatory,
+                    created_by, created_date, lot_level_target_price, max_lot_bid_type, 
+                    min_lot_bid_type, allow_currency_selection
+                FROM {tempTableName}
+                ON CONFLICT (event_id) DO UPDATE SET
+                    event_mode = EXCLUDED.event_mode,
+                    tie_prevent_lot = EXCLUDED.tie_prevent_lot,
+                    tie_prevent_item = EXCLUDED.tie_prevent_item,
+                    target_price_applicable = EXCLUDED.target_price_applicable,
+                    auto_extended_enable = EXCLUDED.auto_extended_enable,
+                    no_of_times_auto_extended = EXCLUDED.no_of_times_auto_extended,
+                    auto_extended_minutes = EXCLUDED.auto_extended_minutes,
+                    apply_extended_times = EXCLUDED.apply_extended_times,
+                    green_percentage = EXCLUDED.green_percentage,
+                    yellow_percentage = EXCLUDED.yellow_percentage,
+                    show_item_level_rank = EXCLUDED.show_item_level_rank,
+                    show_lot_level_rank = EXCLUDED.show_lot_level_rank,
+                    basic_price_applicable = EXCLUDED.basic_price_applicable,
+                    basic_price_validation_mandatory = EXCLUDED.basic_price_validation_mandatory,
+                    min_max_bid_applicable = EXCLUDED.min_max_bid_applicable,
+                    show_lower_bid = EXCLUDED.show_lower_bid,
+                    apply_all_settings_in_price_bid = EXCLUDED.apply_all_settings_in_price_bid,
+                    min_lot_auction_bid_value = EXCLUDED.min_lot_auction_bid_value,
+                    max_lot_auction_bid_value = EXCLUDED.max_lot_auction_bid_value,
+                    configure_lot_level_auction = EXCLUDED.configure_lot_level_auction,
+                    lot_level_basic_price = EXCLUDED.lot_level_basic_price,
+                    price_bid_attachment_mandatory = EXCLUDED.price_bid_attachment_mandatory,
+                    discount_applicable = EXCLUDED.discount_applicable,
+                    gst_mandatory = EXCLUDED.gst_mandatory,
+                    technical_attachment_mandatory = EXCLUDED.technical_attachment_mandatory,
+                    proposed_qty = EXCLUDED.proposed_qty,
+                    ready_stock_mandatory = EXCLUDED.ready_stock_mandatory,
+                    created_by = EXCLUDED.created_by,
+                    created_date = EXCLUDED.created_date,
+                    lot_level_target_price = EXCLUDED.lot_level_target_price,
+                    max_lot_bid_type = EXCLUDED.max_lot_bid_type,
+                    min_lot_bid_type = EXCLUDED.min_lot_bid_type,
+                    allow_currency_selection = EXCLUDED.allow_currency_selection";
+            
+            using (var cmd = new NpgsqlCommand(upsertCmd, pgConn))
+            {
+                cmd.CommandTimeout = 300;
+                await cmd.ExecuteNonQueryAsync();
+            }
+            
+            _logger.LogInformation($"✓ Successfully upserted {batch.Count} event_setting records via BINARY COPY + ON CONFLICT");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"❌ Failed to insert event_setting batch: {ex.Message}");
+            if (batch.Count > 0)
+            {
+                _logger.LogError($"   First record: EventId={batch[0].EventId}");
+            }
+            throw;
+        }
+        finally
+        {
+            // Clean up the temp table
+            try
+            {
+                using var dropCmd = new NpgsqlCommand($"DROP TABLE IF EXISTS {tempTableName}", pgConn);
+                await dropCmd.ExecuteNonQueryAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"⚠️ Failed to drop temp table {tempTableName}: {ex.Message}");
+            }
         }
     }
+    */
+    // END COMMENTED OUT - Event settings migration
 
     protected override async Task<int> ExecuteMigrationAsync(SqlConnection sqlConn, NpgsqlConnection pgConn, NpgsqlTransaction? transaction = null)
     {

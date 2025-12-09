@@ -643,7 +643,7 @@ public class NfaHeaderMigration : MigrationService
 
                 if (batch.Count >= BATCH_SIZE)
                 {
-                    int batchMigrated = await InsertBatchWithTransactionAsync(batch, pgConn);
+                    int batchMigrated = await InsertBatchWithTransactionAsync(batch, pgConn, transaction);
                     migratedRecords += batchMigrated;
                     batch.Clear();
                 }
@@ -652,7 +652,7 @@ public class NfaHeaderMigration : MigrationService
             // Insert remaining records
             if (batch.Count > 0)
             {
-                int batchMigrated = await InsertBatchWithTransactionAsync(batch, pgConn);
+                int batchMigrated = await InsertBatchWithTransactionAsync(batch, pgConn, transaction);
                 migratedRecords += batchMigrated;
             }
 
@@ -787,11 +787,20 @@ public class NfaHeaderMigration : MigrationService
         return map;
     }
 
-    private async Task<int> InsertBatchWithTransactionAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn)
+    private async Task<int> InsertBatchWithTransactionAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn, NpgsqlTransaction? parentTransaction = null)
     {
         int insertedCount = 0;
 
-        using var transaction = await pgConn.BeginTransactionAsync();
+        // Use parent transaction if provided, otherwise create a new one
+        NpgsqlTransaction? transaction = parentTransaction;
+        bool ownTransaction = false;
+        
+        if (transaction == null)
+        {
+            transaction = await pgConn.BeginTransactionAsync();
+            ownTransaction = true;
+        }
+
         try
         {
             foreach (var record in batch)
@@ -807,13 +816,29 @@ public class NfaHeaderMigration : MigrationService
                 insertedCount++;
             }
 
-            await transaction.CommitAsync();
+            // Only commit if we created our own transaction
+            if (ownTransaction)
+            {
+                await transaction.CommitAsync();
+            }
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
+            // Only rollback if we created our own transaction
+            if (ownTransaction)
+            {
+                await transaction.RollbackAsync();
+            }
             _logger.LogError(ex, $"Error inserting batch of {batch.Count} records. Batch rolled back.");
             throw;
+        }
+        finally
+        {
+            // Only dispose if we created our own transaction
+            if (ownTransaction && transaction != null)
+            {
+                await transaction.DisposeAsync();
+            }
         }
 
         return insertedCount;
