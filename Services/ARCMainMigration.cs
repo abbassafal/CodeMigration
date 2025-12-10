@@ -362,7 +362,7 @@ public class ARCMainMigration : MigrationService
                     )";
                 using (var historyCmd = new NpgsqlCommand(historyInsert, pgConn, transaction))
                 {
-                    foreach (Npgsql.NpgsqlParameter param in pgCmd.Parameters)
+                    foreach (NpgsqlParameter param in pgCmd.Parameters)
                     {
                         // arc_header_history does not have arc_header_history_id in insert (auto-increment)
                         if (param.ParameterName != "@arc_header_history_id")

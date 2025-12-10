@@ -182,6 +182,7 @@ public class CompanyMasterMigration : MigrationService
     {
         _migrationLogger = new MigrationLogger(_logger, "company_master");
         _migrationLogger.LogInfo("Starting migration");
+        _migrationLogger.LogSkipped("Starting migration");
 
         Console.WriteLine("🚀 Starting CompanyMaster migration...");
         Console.WriteLine($"📋 Executing query...");

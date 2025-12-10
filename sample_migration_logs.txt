@@ -1,0 +1,49 @@
+[INFO] 2024-12-10 10:00:01 - Table: MaterialMaster - Successfully migrated record with ID: 1
+[INFO] 2024-12-10 10:00:02 - Table: MaterialMaster - Successfully migrated record with ID: 2
+[INFO] 2024-12-10 10:00:03 - Table: MaterialMaster - Successfully migrated record with ID: 3
+[INFO] 2024-12-10 10:00:04 - Table: MaterialMaster - Successfully migrated record with ID: 4
+[INFO] 2024-12-10 10:00:05 - Table: MaterialMaster - Successfully migrated record with ID: 5
+[INFO] 2024-12-10 10:00:06 - Table: MaterialMaster - Successfully migrated record with ID: 6
+[INFO] 2024-12-10 10:00:07 - Table: MaterialMaster - Successfully migrated record with ID: 7
+[INFO] 2024-12-10 10:00:08 - Table: MaterialMaster - Successfully migrated record with ID: 8
+[INFO] 2024-12-10 10:00:09 - Table: MaterialMaster - Successfully migrated record with ID: 9
+[INFO] 2024-12-10 10:00:10 - Table: MaterialMaster - Successfully migrated record with ID: 10
+[INFO] 2024-12-10 10:01:01 - Table: EventMaster - Successfully migrated record with ID: 100
+[INFO] 2024-12-10 10:01:02 - Table: EventMaster - Successfully migrated record with ID: 101
+[INFO] 2024-12-10 10:01:03 - Table: EventMaster - Successfully migrated record with ID: 102
+[ERROR] 2024-12-10 10:01:04 - Table: EventMaster - Failed to migrate record 103: Foreign key constraint violation
+[ERROR] 2024-12-10 10:01:05 - Table: EventMaster - Failed to migrate record 104: Foreign key constraint violation
+[ERROR] 2024-12-10 10:01:06 - Table: EventMaster - Failed to migrate record 105: Foreign key constraint violation
+[INFO] 2024-12-10 10:02:01 - Table: SupplierMaster - Successfully migrated record with ID: 200
+[INFO] 2024-12-10 10:02:02 - Table: SupplierMaster - Successfully migrated record with ID: 201
+[INFO] 2024-12-10 10:02:03 - Table: SupplierMaster - Successfully migrated record with ID: 202
+[INFO] 2024-12-10 10:02:04 - Table: SupplierMaster - Successfully migrated record with ID: 203
+[WARNING] 2024-12-10 10:03:01 - Table: POMaster - Record 300 has NULL value in required field
+[WARNING] 2024-12-10 10:03:02 - Table: POMaster - Record 301 has NULL value in required field
+[WARNING] 2024-12-10 10:03:03 - Table: POMaster - Record 302 has NULL value in required field
+[INFO] 2024-12-10 10:04:01 - Migrated 500 records for EventItems
+[INFO] 2024-12-10 10:04:02 - Migrated 250 records for EventBoqItems
+[SUCCESS] 2024-12-10 10:05:01 - Migration completed for MaterialMaster - 1000 records migrated
+[SUCCESS] 2024-12-10 10:05:02 - Migration completed for EventMaster - 850 records migrated
+[SUCCESS] 2024-12-10 10:05:03 - Migration completed for SupplierMaster - 500 records migrated
+[ERROR] 2024-12-10 10:06:01 - Table: WorkflowAmount - Failed to migrate record 400: Numeric overflow
+[ERROR] 2024-12-10 10:06:02 - Table: WorkflowAmount - Failed to migrate record 401: Numeric overflow
+[ERROR] 2024-12-10 10:06:03 - Table: WorkflowAmount - Failed to migrate record 402: Numeric overflow
+[ERROR] 2024-12-10 10:06:04 - Table: WorkflowAmount - Failed to migrate record 403: Numeric overflow
+[INFO] 2024-12-10 10:07:01 - Table: UserMaster - Successfully migrated record with ID: 50
+[INFO] 2024-12-10 10:07:02 - Table: UserMaster - Successfully migrated record with ID: 51
+[INFO] 2024-12-10 10:07:03 - Table: UserMaster - Successfully migrated record with ID: 52
+[INFO] 2024-12-10 10:07:04 - Table: UserMaster - Successfully migrated record with ID: 53
+[INFO] 2024-12-10 10:07:05 - Table: UserMaster - Successfully migrated record with ID: 54
+[INFO] 2024-12-10 10:07:06 - Table: UserMaster - Successfully migrated record with ID: 55
+[INFO] 2024-12-10 10:08:01 - Starting binary attachment migration for PRAttachment
+[INFO] 2024-12-10 10:08:30 - Completed binary attachment migration - 125 files processed
+[WARNING] 2024-12-10 10:09:01 - Skipped 5 records due to missing data in EventCommunication
+[INFO] 2024-12-10 10:10:01 - Table: CurrencyMaster - Successfully migrated record with ID: 1
+[INFO] 2024-12-10 10:10:02 - Table: CurrencyMaster - Successfully migrated record with ID: 2
+[INFO] 2024-12-10 10:10:03 - Table: CurrencyMaster - Successfully migrated record with ID: 3
+[INFO] 2024-12-10 10:10:04 - Table: CountryMaster - Successfully migrated record with ID: 1
+[INFO] 2024-12-10 10:10:05 - Table: CountryMaster - Successfully migrated record with ID: 2
+[INFO] 2024-12-10 10:10:06 - Table: CountryMaster - Successfully migrated record with ID: 3
+[INFO] 2024-12-10 10:10:07 - Table: CountryMaster - Successfully migrated record with ID: 4
+[INFO] 2024-12-10 10:10:08 - Table: CountryMaster - Successfully migrated record with ID: 5

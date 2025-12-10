@@ -1,0 +1,108 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                       LOG SUMMARIZATION UI - QUICK START                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📍 URL
+   http://localhost:5000/Migration/LogSummarization
+
+🎯 PURPOSE
+   Analyze and compress migration logs with smart pattern detection and grouping
+
+✨ KEY FEATURES
+   ├─ Smart Pattern Detection - Groups similar log entries automatically
+   ├─ ID Range Compression - Shows "1-100" instead of listing all IDs
+   ├─ Visual Statistics - Compression ratio, space saved, pattern counts
+   ├─ Interactive Table - Browse grouped patterns with color-coded levels
+   └─ Export Options - Download as Text or CSV format
+
+🚀 QUICK START
+
+   1. Open URL in browser
+   2. Enter log file path: "sample_migration_logs.txt"
+   3. Choose format: Text or CSV
+   4. Click "Analyze Logs"
+   5. View results and download report
+
+📊 STATISTICS EXPLAINED
+
+   Total Log Lines      │ Original number of log entries
+   Grouped Patterns     │ Unique patterns identified
+   Compression Ratio    │ 10x = 10 lines compressed to 1 group
+   Space Saved          │ Percentage reduction in log size
+
+🎨 LOG LEVEL COLORS
+
+   🔵 INFO (Blue)       │ Informational messages
+   🟢 SUCCESS (Green)   │ Successful operations  
+   🟡 WARNING (Yellow)  │ Warning messages
+   🔴 ERROR (Red)       │ Error messages
+
+⌨️  KEYBOARD SHORTCUTS
+
+   Ctrl + Enter         │ Start analysis
+
+🔧 SAMPLE LOG PATHS
+
+   Relative:  migration_logs.txt
+              logs/migration_2024.txt
+   
+   Absolute:  /home/user/logs/migration.txt
+              /var/log/migration/latest.txt
+
+📝 OUTPUT FORMATS
+
+   TEXT                 │ Human-readable report with formatting
+   CSV                  │ Spreadsheet format (Excel compatible)
+
+🔌 API ENDPOINTS
+
+   POST /Migration/SummarizeLogs
+   ├─ Analyzes log file
+   └─ Returns JSON with summary and report
+
+   POST /Migration/DownloadSummarizedLogs
+   ├─ Same as above
+   └─ Returns file download
+
+   GET /Migration/LogSummarization
+   └─ Opens the UI page
+
+💡 USE CASES
+
+   ✓ Quick migration summaries
+   ✓ Error pattern identification
+   ✓ Performance analysis
+   ✓ Executive reporting
+   ✓ Log archiving
+
+🛠️  TROUBLESHOOTING
+
+   File not found       │ Check path, use absolute path
+   No patterns          │ Verify log file format
+   Slow processing      │ Normal for large files (>50MB)
+
+📦 EXAMPLE OUTPUT
+
+   Pattern: "Successfully migrated record"
+   Count: 100 occurrences
+   ID Range: 1-100
+   Time: 10:00:01 - 10:10:10
+
+🔗 INTEGRATION
+
+   From Dashboard:
+   <a href="/Migration/LogSummarization">Analyze Logs</a>
+
+   From Script:
+   curl -X POST http://localhost:5000/Migration/SummarizeLogs \
+     -H "Content-Type: application/json" \
+     -d '{"logFilePath":"migration_logs.txt","format":"text"}'
+
+📚 DOCUMENTATION
+
+   Full Guide: LOG_SUMMARIZATION_UI_GUIDE.md
+   Sample Logs: sample_migration_logs.txt
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  Need Help? Check the full guide or contact the development team             ║
+╚══════════════════════════════════════════════════════════════════════════════╝

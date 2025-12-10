@@ -2464,6 +2464,110 @@ public class MigrationController : Controller
     }
 
     /// <summary>
+    /// Summarize migration logs from file
+    /// </summary>
+    [HttpPost("SummarizeLogs")]
+    public IActionResult SummarizeLogs([FromBody] LogSummarizationRequest request)
+    {
+        try
+        {
+            var logService = new LogSummarizationService();
+            var logFilePath = request.LogFilePath ?? "migration_logs.txt";
+            
+            if (!Path.IsPathRooted(logFilePath))
+            {
+                logFilePath = Path.Combine(Directory.GetCurrentDirectory(), logFilePath);
+            }
+
+            var summary = logService.SummarizeLogFile(logFilePath);
+            
+            string report = request.Format?.ToLower() == "csv" 
+                ? logService.GenerateCsvReport(summary)
+                : logService.GenerateTextReport(summary);
+
+            return Json(new
+            {
+                success = true,
+                summary = new
+                {
+                    totalLines = summary.TotalLines,
+                    groupedLines = summary.GroupedLines,
+                    compressionRatio = summary.GroupedLines > 0 ? (double)summary.TotalLines / summary.GroupedLines : 0,
+                    groupedLogs = summary.GroupedLogs.Select(g => new
+                    {
+                        logPattern = g.LogPattern,
+                        logLevel = g.LogLevel,
+                        count = g.Count,
+                        idRange = g.IdRange,
+                        firstTimestamp = g.FirstTimestamp,
+                        lastTimestamp = g.LastTimestamp
+                    })
+                },
+                report = report
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error summarizing logs");
+            return Json(new { success = false, message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Download summarized logs as file
+    /// </summary>
+    [HttpPost("DownloadSummarizedLogs")]
+    public IActionResult DownloadSummarizedLogs([FromBody] LogSummarizationRequest request)
+    {
+        try
+        {
+            var logService = new LogSummarizationService();
+            var logFilePath = request.LogFilePath ?? "migration_logs.txt";
+            
+            if (!Path.IsPathRooted(logFilePath))
+            {
+                logFilePath = Path.Combine(Directory.GetCurrentDirectory(), logFilePath);
+            }
+
+            var summary = logService.SummarizeLogFile(logFilePath);
+            
+            string report;
+            string contentType;
+            string fileName;
+            
+            if (request.Format?.ToLower() == "csv")
+            {
+                report = logService.GenerateCsvReport(summary);
+                contentType = "text/csv";
+                fileName = $"migration_logs_summary_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+            }
+            else
+            {
+                report = logService.GenerateTextReport(summary);
+                contentType = "text/plain";
+                fileName = $"migration_logs_summary_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+            }
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(report);
+            return File(bytes, contentType, fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading summarized logs");
+            return Json(new { success = false, message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Display log summarization UI page
+    /// </summary>
+    [HttpGet("LogSummarization")]
+    public IActionResult LogSummarization()
+    {
+        return View();
+    }
+
+    /// <summary>
     /// Get binary migration status
     /// </summary>
     [HttpGet("GetBinaryMigrationStatus/{jobId}")]
@@ -2510,6 +2614,12 @@ public class MigrationController : Controller
 public class BinaryMigrationRequest
 {
     public string TableName { get; set; } = "";
+}
+
+public class LogSummarizationRequest
+{
+    public string? LogFilePath { get; set; }
+    public string? Format { get; set; }
 }
 
 public class MigrationRequest

@@ -1,0 +1,639 @@
+@{
+    ViewData["Title"] = "Log Summarization";
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #6366f1;
+            --primary-dark: #4f46e5;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #0ea5e9;
+            --dark-bg: #1e293b;
+            --card-bg: #ffffff;
+            --text-dark: #1e293b;
+            --text-light: #64748b;
+            --border-color: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            color: var(--text-dark);
+            font-weight: 700;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: var(--text-light);
+            font-size: 1rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: none;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control, .form-select {
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #64748b, #475569);
+            color: white;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.75rem;
+            font-size: 1.25rem;
+        }
+
+        .icon-primary { background: rgba(99, 102, 241, 0.1); color: var(--primary-color); }
+        .icon-success { background: rgba(16, 185, 129, 0.1); color: var(--success-color); }
+        .icon-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning-color); }
+        .icon-info { background: rgba(14, 165, 233, 0.1); color: var(--info-color); }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table thead {
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+        }
+
+        .table thead th {
+            font-weight: 600;
+            color: var(--text-dark);
+            border-bottom: 2px solid var(--border-color);
+            padding: 1rem;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table tbody td {
+            padding: 1rem;
+            color: var(--text-dark);
+            vertical-align: middle;
+        }
+
+        .table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s ease;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 0.75rem;
+        }
+
+        .badge-info { background: rgba(14, 165, 233, 0.1); color: var(--info-color); }
+        .badge-success { background: rgba(16, 185, 129, 0.1); color: var(--success-color); }
+        .badge-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning-color); }
+        .badge-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger-color); }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(99, 102, 241, 0.1);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @@keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .alert {
+            border-radius: 12px;
+            border: none;
+            padding: 1rem 1.5rem;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+            border-left: 4px solid var(--success-color);
+        }
+
+        .alert-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+            border-left: 4px solid var(--danger-color);
+        }
+
+        .report-section {
+            display: none;
+        }
+
+        .report-section.active {
+            display: block;
+        }
+
+        .pre-report {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        @@media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-file-chart-line"></i> Log Summarization</h1>
+            <p>Analyze and compress migration logs with smart pattern detection</p>
+        </div>
+
+        <!-- Input Form -->
+        <div class="card">
+            <h5 class="card-title">
+                <i class="fas fa-cog"></i>
+                Configuration
+            </h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="logFilePath" class="form-label">Log File Path</label>
+                    <input type="text" class="form-control" id="logFilePath" 
+                           placeholder="migration_logs.txt or /full/path/to/logs.txt"
+                           value="migration_logs.txt">
+                    <small class="text-muted">Enter relative or absolute path to the log file</small>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="format" class="form-label">Output Format</label>
+                    <select class="form-select" id="format">
+                        <option value="text">Text Report</option>
+                        <option value="csv">CSV Report</option>
+                    </select>
+                    <small class="text-muted">Choose the summary report format</small>
+                </div>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="summarizeLogs()">
+                    <i class="fas fa-chart-bar"></i> Analyze Logs
+                </button>
+                <button class="btn btn-success" onclick="downloadSummary()" id="downloadBtn" disabled>
+                    <i class="fas fa-download"></i> Download Report
+                </button>
+                <button class="btn btn-secondary" onclick="clearResults()">
+                    <i class="fas fa-times"></i> Clear
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p class="text-white">Analyzing log file...</p>
+        </div>
+
+        <!-- Alert Messages -->
+        <div id="alertContainer"></div>
+
+        <!-- Statistics -->
+        <div class="report-section" id="statsSection">
+            <div class="card">
+                <h5 class="card-title">
+                    <i class="fas fa-chart-pie"></i>
+                    Summary Statistics
+                </h5>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon icon-primary">
+                            <i class="fas fa-file-lines"></i>
+                        </div>
+                        <div class="stat-label">Total Log Lines</div>
+                        <div class="stat-value" id="totalLines">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-success">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <div class="stat-label">Grouped Patterns</div>
+                        <div class="stat-value" id="groupedLines">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-warning">
+                            <i class="fas fa-compress"></i>
+                        </div>
+                        <div class="stat-label">Compression Ratio</div>
+                        <div class="stat-value" id="compressionRatio">0x</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-info">
+                            <i class="fas fa-percent"></i>
+                        </div>
+                        <div class="stat-label">Space Saved</div>
+                        <div class="stat-value" id="spaceSaved">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grouped Logs Table -->
+        <div class="report-section" id="tableSection">
+            <div class="card">
+                <h5 class="card-title">
+                    <i class="fas fa-table"></i>
+                    Grouped Log Patterns
+                </h5>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Level</th>
+                                <th>Pattern</th>
+                                <th>Count</th>
+                                <th>ID Range</th>
+                                <th>First Occurrence</th>
+                                <th>Last Occurrence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report Preview -->
+        <div class="report-section" id="reportSection">
+            <div class="card">
+                <h5 class="card-title">
+                    <i class="fas fa-file-alt"></i>
+                    Report Preview
+                </h5>
+                <pre class="pre-report" id="reportPreview"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentSummary = null;
+
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            alertContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('active', show);
+        }
+
+        function clearResults() {
+            document.querySelectorAll('.report-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById('downloadBtn').disabled = true;
+            document.getElementById('logsTableBody').innerHTML = '';
+            document.getElementById('reportPreview').textContent = '';
+            currentSummary = null;
+        }
+
+        function getLevelBadgeClass(level) {
+            level = level?.toLowerCase() || 'info';
+            if (level.includes('error') || level.includes('fail')) return 'badge-danger';
+            if (level.includes('warn')) return 'badge-warning';
+            if (level.includes('success')) return 'badge-success';
+            return 'badge-info';
+        }
+
+        async function summarizeLogs() {
+            const logFilePath = document.getElementById('logFilePath').value.trim();
+            const format = document.getElementById('format').value;
+
+            if (!logFilePath) {
+                showAlert('Please enter a log file path', 'danger');
+                return;
+            }
+
+            showLoading(true);
+            clearResults();
+
+            try {
+                const response = await fetch('/Migration/SummarizeLogs', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        logFilePath: logFilePath,
+                        format: format
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentSummary = data;
+                    displaySummary(data);
+                    showAlert('Log analysis completed successfully!', 'success');
+                    document.getElementById('downloadBtn').disabled = false;
+                } else {
+                    showAlert(`Error: ${data.message || 'Failed to analyze logs'}`, 'danger');
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'danger');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displaySummary(data) {
+            const { summary, report } = data;
+
+            // Update statistics
+            document.getElementById('totalLines').textContent = summary.totalLines.toLocaleString();
+            document.getElementById('groupedLines').textContent = summary.groupedLines.toLocaleString();
+            
+            const compressionRatio = summary.compressionRatio.toFixed(1);
+            document.getElementById('compressionRatio').textContent = compressionRatio + 'x';
+            
+            const spaceSaved = ((1 - 1/summary.compressionRatio) * 100).toFixed(1);
+            document.getElementById('spaceSaved').textContent = spaceSaved + '%';
+
+            // Populate table
+            const tbody = document.getElementById('logsTableBody');
+            tbody.innerHTML = '';
+
+            summary.groupedLogs.forEach(log => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><span class="badge ${getLevelBadgeClass(log.logLevel)}">${log.logLevel || 'INFO'}</span></td>
+                    <td style="max-width: 400px; word-break: break-word;">${log.logPattern}</td>
+                    <td><strong>${log.count.toLocaleString()}</strong></td>
+                    <td><code>${log.idRange || 'N/A'}</code></td>
+                    <td><small>${log.firstTimestamp || 'N/A'}</small></td>
+                    <td><small>${log.lastTimestamp || 'N/A'}</small></td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            // Show report preview
+            document.getElementById('reportPreview').textContent = report;
+
+            // Show sections
+            document.getElementById('statsSection').classList.add('active');
+            document.getElementById('tableSection').classList.add('active');
+            document.getElementById('reportSection').classList.add('active');
+        }
+
+        async function downloadSummary() {
+            if (!currentSummary) {
+                showAlert('No summary available to download', 'warning');
+                return;
+            }
+
+            const logFilePath = document.getElementById('logFilePath').value.trim();
+            const format = document.getElementById('format').value;
+
+            try {
+                const response = await fetch('/Migration/DownloadSummarizedLogs', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        logFilePath: logFilePath,
+                        format: format
+                    })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    const contentDisposition = response.headers.get('content-disposition');
+                    let fileName = `migration_logs_summary_${new Date().getTime()}.${format === 'csv' ? 'csv' : 'txt'}`;
+                    
+                    if (contentDisposition) {
+                        const matches = /filename="?([^"]+)"?/.exec(contentDisposition);
+                        if (matches && matches[1]) {
+                            fileName = matches[1];
+                        }
+                    }
+                    
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showAlert('Report downloaded successfully!', 'success');
+                } else {
+                    showAlert('Failed to download report', 'danger');
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'danger');
+            }
+        }
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                summarizeLogs();
+            }
+        });
+    </script>
+</body>
+</html>
