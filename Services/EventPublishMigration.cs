@@ -53,6 +53,7 @@ namespace DataMigration.Services
             var migratedRecords = 0;
             var skippedRecords = 0;
             var errors = new List<string>();
+            var skippedRecordDetails = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -143,6 +144,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogWarning($"Record skipped: PublishEventAutoMailSendId is NULL");
                             skippedRecords++;
+                            skippedRecordDetails.Add(("NULL", "PublishEventAutoMailSendId is NULL"));
                             continue;
                         }
 
@@ -151,6 +153,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogDebug($"PublishEventAutoMailSendId {record.PublishEventAutoMailSendId}: event_id {record.EVENTID} not found in event_master (FK constraint violation)");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PublishEventAutoMailSendId?.ToString() ?? "NULL", $"Invalid event_id: {record.EVENTID}"));
                             continue;
                         }
 
@@ -202,6 +205,7 @@ namespace DataMigration.Services
                         _logger.LogError(errorMsg);
                         errors.Add(errorMsg);
                         skippedRecords++;
+                        skippedRecordDetails.Add((record.PublishEventAutoMailSendId?.ToString() ?? "NULL", $"Exception: {ex.Message}"));
                     }
                 }
 
@@ -222,6 +226,15 @@ namespace DataMigration.Services
                 {
                     _logger.LogWarning($"Encountered {errors.Count} errors during migration");
                 }
+                // Export migration stats and skipped records to Excel
+                MigrationStatsExporter.ExportToExcel(
+                    "EventPublishMigrationStats.xlsx",
+                    sourceData.Count,
+                    migratedRecords,
+                    skippedRecords,
+                    _logger,
+                    skippedRecordDetails
+                );
             }
             catch (Exception ex)
             {

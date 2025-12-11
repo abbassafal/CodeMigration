@@ -52,42 +52,61 @@ public class MaterialGroupMasterMigration : MigrationService
     {
         using var sqlCmd = new SqlCommand(SelectQuery, sqlConn);
         using var reader = await sqlCmd.ExecuteReaderAsync();
-
         using var pgCmd = new NpgsqlCommand(InsertQuery, pgConn);
         if (transaction != null)
         {
             pgCmd.Transaction = transaction;
         }
-
+        var skippedRecordDetails = new List<(string RecordId, string Reason)>();
+        int totalRecords = 0;
         while (await reader.ReadAsync())
         {
+            totalRecords++;
             var materialGroupId = reader["MaterialGroupId"];
             var recordId = $"ID={materialGroupId}";
-            
-            pgCmd.Parameters.Clear();
-            pgCmd.Parameters.AddWithValue("@material_group_id", materialGroupId);
-            pgCmd.Parameters.AddWithValue("@company_id", reader["SAPClientId"]);
-            pgCmd.Parameters.AddWithValue("@material_group_code", reader["MaterialGroupCode"]);
-            pgCmd.Parameters.AddWithValue("@material_group_name", reader["MaterialGroupName"]);
-            pgCmd.Parameters.AddWithValue("@material_group_description", reader["MaterialGroupDescription"]);
-            pgCmd.Parameters.AddWithValue("@created_by", 0);
-            pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow);
-            pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value);
-            pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value);
-            bool isActive = (int)reader["IsActive"] == 1;
-            pgCmd.Parameters.AddWithValue("@is_deleted", !isActive);
-            pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value);
-            pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value);
-            int result = await pgCmd.ExecuteNonQueryAsync();
-            if (result > 0)
+            try
             {
-                migrationLogger.LogInserted(recordId);
+                pgCmd.Parameters.Clear();
+                pgCmd.Parameters.AddWithValue("@material_group_id", materialGroupId);
+                pgCmd.Parameters.AddWithValue("@company_id", reader["SAPClientId"]);
+                pgCmd.Parameters.AddWithValue("@material_group_code", reader["MaterialGroupCode"]);
+                pgCmd.Parameters.AddWithValue("@material_group_name", reader["MaterialGroupName"]);
+                pgCmd.Parameters.AddWithValue("@material_group_description", reader["MaterialGroupDescription"]);
+                pgCmd.Parameters.AddWithValue("@created_by", 0);
+                pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow);
+                pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value);
+                pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value);
+                bool isActive = (int)reader["IsActive"] == 1;
+                pgCmd.Parameters.AddWithValue("@is_deleted", !isActive);
+                pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value);
+                pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value);
+                int result = await pgCmd.ExecuteNonQueryAsync();
+                if (result > 0)
+                {
+                    migrationLogger.LogInserted(recordId);
+                }
+                else
+                {
+                    migrationLogger.LogSkipped(recordId, "Insert returned 0");
+                    skippedRecordDetails.Add((recordId, "Insert returned 0"));
+                }
+            }
+            catch (Exception ex)
+            {
+                migrationLogger.LogSkipped(recordId, ex.Message);
+                skippedRecordDetails.Add((recordId, ex.Message));
             }
         }
-        
         var summary = migrationLogger.GetSummary();
         _logger.LogInformation($"Material Group Master Migration completed. Inserted: {summary.TotalInserted}, Skipped: {summary.TotalSkipped}");
-        
+        MigrationStatsExporter.ExportToExcel(
+            "MaterialGroupMasterMigration_Stats.xlsx",
+            totalRecords,
+            summary.TotalInserted,
+            summary.TotalSkipped,
+            _logger,
+            skippedRecordDetails
+        );
         return summary.TotalInserted;
     }
 }

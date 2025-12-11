@@ -340,9 +340,10 @@ public class EventMasterMigration : MigrationService
         var stopwatch = Stopwatch.StartNew();
         int successCount = 0;
         int failedCount = 0;
-        var errors = new List<string>();
         int totalRecords = 0;
-        
+        var errors = new List<string>();
+        var skippedRecords = new List<(int EventId, string Reason)>();
+
         SqlConnection? sqlConnection = null;
         NpgsqlConnection? pgConnection = null;
 
@@ -449,6 +450,16 @@ public class EventMasterMigration : MigrationService
                 _logger.LogWarning($"  - {error}");
             }
         }
+
+        // Export migration stats and skipped records to Excel
+        MigrationStatsExporter.ExportToExcel(
+            "EventMasterMigrationStats.xlsx",
+            totalRecords,
+            successCount,
+            skippedRecords.Count,
+            _logger,
+            skippedRecords.Select(r => (r.EventId.ToString(), r.Reason)).ToList()
+        );
 
         return (successCount, failedCount, errors);
     }

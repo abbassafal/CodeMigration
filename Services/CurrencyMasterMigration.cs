@@ -77,6 +77,9 @@ public class CurrencyMasterMigration : MigrationService
         using var pgCmd = new NpgsqlCommand(InsertQuery, pgConn, transaction);
 
         int currencyCount = 0;
+        int insertedCount = 0;
+        int skippedCount = 0;
+        var skippedRecords = new List<(string RecordId, string Reason)>();
 
         while (await reader.ReadAsync())
         {
@@ -111,12 +114,14 @@ public class CurrencyMasterMigration : MigrationService
                     if (result > 0)
                     {
                         migrationLogger.LogInserted(recordId);
+                        insertedCount++;
                     }
                 }
                 catch (Exception ex)
                 {
                     migrationLogger.LogError($"Failed to insert currency '{currencyCode}' for company {companyId}: {ex.Message}", recordId, ex);
-                    
+                    skippedCount++;
+                    skippedRecords.Add((recordId, ex.Message));
                     // If we're in a transaction and it's aborted, we need to stop
                     if (transaction != null && ex.Message.Contains("current transaction is aborted"))
                     {
@@ -128,13 +133,25 @@ public class CurrencyMasterMigration : MigrationService
 
             if (currencyCount % 10 == 0)
             {
-                migrationLogger.LogInfo($"Processed {currencyCount} currencies... (Inserted: {migrationLogger.InsertedCount}, Errors: {migrationLogger.ErrorCount})");
+                migrationLogger.LogInfo($"Processed {currencyCount} currencies... (Inserted: {insertedCount}, Skipped: {skippedCount})");
             }
         }
 
         var summary = migrationLogger.GetSummary();
-        _logger.LogInformation($"Currency Migration Summary: Source currencies: {currencyCount}, Companies: {companyIds.Count}, Inserted: {summary.TotalInserted}, Errors: {summary.TotalErrors}");
+        _logger.LogInformation($"Currency Migration Summary: Source currencies: {currencyCount}, Companies: {companyIds.Count}, Inserted: {insertedCount}, Skipped: {skippedCount}, Errors: {summary.TotalErrors}");
 
-        return summary.TotalInserted;
+        // Export migration stats to Excel
+        var excelPath = Path.Combine("migration_outputs", $"CurrencyMasterMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+        MigrationStatsExporter.ExportToExcel(
+            excelPath,
+            currencyCount * companyIds.Count,
+            insertedCount,
+            skippedCount,
+            _logger,
+            skippedRecords
+        );
+        _logger.LogInformation($"Migration stats exported to {excelPath}");
+
+        return insertedCount;
     }
 }

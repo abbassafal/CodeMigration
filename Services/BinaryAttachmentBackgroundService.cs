@@ -206,6 +206,7 @@ namespace DataMigration.Services
             var batch = new List<(long id, long size, Func<CancellationToken, Task<Stream>> streamFactory)>();
             int skippedLarge = 0;
             int skippedEmpty = 0;
+            var skippedRecords = new List<(string RecordId, string Reason)>();
 
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -215,6 +216,7 @@ namespace DataMigration.Services
                 if (size == 0)
                 {
                     skippedEmpty++;
+                    skippedRecords.Add((id.ToString(), "Empty binary data"));
                     continue;
                 }
 
@@ -222,6 +224,7 @@ namespace DataMigration.Services
                 {
                     _logger.LogWarning($"Skipping large binary for ID {id} (size {size:N0} bytes)");
                     skippedLarge++;
+                    skippedRecords.Add((id.ToString(), $"Binary too large: {size:N0} bytes"));
                     continue;
                 }
 
@@ -268,6 +271,18 @@ namespace DataMigration.Services
 
             status.SkippedFiles = skippedEmpty + skippedLarge;
             _logger.LogInformation($"Binary migration complete: Processed={status.ProcessedFiles}, Skipped={status.SkippedFiles}");
+
+            // Export migration stats to Excel
+            var excelPath = Path.Combine("migration_outputs", $"BinaryMigration_{job.TableName}_{job.MigrationId}.xlsx");
+            MigrationStatsExporter.ExportToExcel(
+                excelPath,
+                status.TotalFiles,
+                status.ProcessedFiles,
+                status.SkippedFiles,
+                _logger,
+                skippedRecords
+            );
+            _logger.LogInformation($"Migration stats exported to {excelPath}");
         }
 
         private async Task ProcessBinaryBatchAsync(

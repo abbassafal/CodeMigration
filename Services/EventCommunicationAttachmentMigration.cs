@@ -376,6 +376,20 @@ namespace DataMigration.Services
 
                 _migrationLogger.LogInfo($"Migration completed. Migrated: {migratedRecords}, Skipped: {skippedRecords}");
 
+                // Export migration stats to Excel
+                var skippedLogEntries = _migrationLogger.GetSkippedRecords();
+                var skippedRecordsList = skippedLogEntries.Select(e => (e.RecordIdentifier, e.Message)).ToList();
+                var excelPath = Path.Combine("migration_outputs", $"EventCommunicationAttachmentMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+                MigrationStatsExporter.ExportToExcel(
+                    excelPath,
+                    migratedRecords + skippedRecords,
+                    migratedRecords,
+                    skippedRecords,
+                    _logger,
+                    skippedRecordsList
+                );
+                _migrationLogger.LogInfo($"Migration stats exported to {excelPath}");
+
                 if (migratedRecords == 0 && skippedRecords > 0)
                 {
                     _migrationLogger.LogError($"CRITICAL: All {skippedRecords} attachment records were skipped! Common reasons:", "ALL_SKIPPED");

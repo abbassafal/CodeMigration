@@ -49,6 +49,7 @@ namespace DataMigration.Services
             var migratedRecords = 0;
             var skippedRecords = 0;
             var errors = new List<string>();
+            var skippedRecordDetails = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -141,6 +142,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogDebug($"PBID {record.PBID}: event_id {record.EVENTID} not found in event_master (FK constraint violation)");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PBID.ToString(), $"Invalid event_id: {record.EVENTID}"));
                             continue;
                         }
 
@@ -149,6 +151,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogDebug($"PBID {record.PBID}: No header data found, skipping");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PBID.ToString(), "No header data found"));
                             continue;
                         }
 
@@ -195,6 +198,7 @@ namespace DataMigration.Services
                         _logger.LogError(errorMsg);
                         errors.Add(errorMsg);
                         skippedRecords++;
+                        skippedRecordDetails.Add((record.PBID.ToString(), $"Exception: {ex.Message}"));
                     }
                 }
 
@@ -205,11 +209,19 @@ namespace DataMigration.Services
                 }
 
                 _logger.LogInformation($"Migration completed. Source Records Processed: {migratedRecords}, Skipped: {skippedRecords}, Total Rows Generated: {totalRowsGenerated}");
-                
                 if (errors.Any())
                 {
                     _logger.LogWarning($"Encountered {errors.Count} errors during migration");
                 }
+                // Export migration stats and skipped records to Excel
+                MigrationStatsExporter.ExportToExcel(
+                    "EventPriceBidColumnsMigrationStats.xlsx",
+                    sourceData.Count,
+                    migratedRecords,
+                    skippedRecords,
+                    _logger,
+                    skippedRecordDetails
+                );
             }
             catch (Exception ex)
             {

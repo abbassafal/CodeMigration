@@ -129,6 +129,22 @@ namespace DataMigration.Services
 
                 _logger.LogInformation(message);
 
+                // Export truncation stats to Excel
+                var skippedRecords = errors.Select(e => {
+                    var parts = e.Split(':', 2);
+                    return (RecordId: parts[0], Reason: parts.Length > 1 ? parts[1].Trim() : "Unknown error");
+                }).ToList();
+                var excelPath = Path.Combine("migration_outputs", $"DatabaseTruncate_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+                MigrationStatsExporter.ExportToExcel(
+                    excelPath,
+                    tablesToTruncate.Count,
+                    tablesTruncated,
+                    errors.Count,
+                    _logger,
+                    skippedRecords
+                );
+                _logger.LogInformation($"Truncation stats exported to {excelPath}");
+
                 return (true, message, tablesTruncated, tablesToTruncate.Count, errors);
             }
             catch (Exception ex)

@@ -53,41 +53,59 @@ public class IncotermMasterMigration : MigrationService
     {
         using var sqlCmd = new SqlCommand(SelectQuery, sqlConn);
         using var reader = await sqlCmd.ExecuteReaderAsync();
-
         using var pgCmd = new NpgsqlCommand(InsertQuery, pgConn);
         if (transaction != null)
         {
             pgCmd.Transaction = transaction;
         }
-
+        var skippedRecordDetails = new List<(string RecordId, string Reason)>();
+        int totalRecords = 0;
         while (await reader.ReadAsync())
         {
+            totalRecords++;
             var incoId = reader["IncoID"];
             var recordId = $"ID={incoId}";
-            
-            pgCmd.Parameters.Clear();
-            pgCmd.Parameters.AddWithValue("@incoterm_id", incoId);
-            pgCmd.Parameters.AddWithValue("@incoterm_code", reader["IncoCode"]);
-            pgCmd.Parameters.AddWithValue("@incoterm_name", reader["IncoDescription"]);
-            pgCmd.Parameters.AddWithValue("@company_id", reader["ClientSAPId"]);
-            pgCmd.Parameters.AddWithValue("@created_by", 0);
-            pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow);
-            pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value);
-            pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value);
-            pgCmd.Parameters.AddWithValue("@is_deleted", false);
-            pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value);
-            pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value);
-            
-            int result = await pgCmd.ExecuteNonQueryAsync();
-            if (result > 0)
+            try
             {
-                migrationLogger.LogInserted(recordId);
+                pgCmd.Parameters.Clear();
+                pgCmd.Parameters.AddWithValue("@incoterm_id", incoId);
+                pgCmd.Parameters.AddWithValue("@incoterm_code", reader["IncoCode"]);
+                pgCmd.Parameters.AddWithValue("@incoterm_name", reader["IncoDescription"]);
+                pgCmd.Parameters.AddWithValue("@company_id", reader["ClientSAPId"]);
+                pgCmd.Parameters.AddWithValue("@created_by", 0);
+                pgCmd.Parameters.AddWithValue("@created_date", DateTime.UtcNow);
+                pgCmd.Parameters.AddWithValue("@modified_by", DBNull.Value);
+                pgCmd.Parameters.AddWithValue("@modified_date", DBNull.Value);
+                pgCmd.Parameters.AddWithValue("@is_deleted", false);
+                pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value);
+                pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value);
+                int result = await pgCmd.ExecuteNonQueryAsync();
+                if (result > 0)
+                {
+                    migrationLogger.LogInserted(recordId);
+                }
+                else
+                {
+                    migrationLogger.LogSkipped(recordId, "Insert returned 0");
+                    skippedRecordDetails.Add((recordId, "Insert returned 0"));
+                }
+            }
+            catch (Exception ex)
+            {
+                migrationLogger.LogSkipped(recordId, ex.Message);
+                skippedRecordDetails.Add((recordId, ex.Message));
             }
         }
-        
         var summary = migrationLogger.GetSummary();
         _logger.LogInformation($"Incoterm Master Migration completed. Inserted: {summary.TotalInserted}, Skipped: {summary.TotalSkipped}");
-        
+        MigrationStatsExporter.ExportToExcel(
+            "IncotermMasterMigration_Stats.xlsx",
+            totalRecords,
+            summary.TotalInserted,
+            summary.TotalSkipped,
+            _logger,
+            skippedRecordDetails
+        );
         return summary.TotalInserted;
     }
 }

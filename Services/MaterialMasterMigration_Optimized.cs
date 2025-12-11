@@ -252,6 +252,7 @@ public class MaterialMasterMigration : MigrationService
         var processedCount = 0;
         var skippedCount = 0;
         var batch = new List<MaterialRecord>();
+        var skippedRecords = new List<(string RecordId, string Reason)>();
 
         progress.ReportProgress(0, totalRecords, "Starting migration...", stopwatch.Elapsed);
 
@@ -276,56 +277,52 @@ public class MaterialMasterMigration : MigrationService
             while (await reader.ReadAsync())
             {
                 processedCount++;
-                
+                MaterialRecord? record = null;
                 try
                 {
-                    var record = ReadMaterialRecord(reader, processedCount, defaultUomId, validUomIds);
-                    
-                    if (record != null)
+                    record = ReadMaterialRecord(reader, processedCount, defaultUomId, validUomIds);
+                }
+                catch (Exception ex)
+                {
+                    skippedCount++;
+                    var itemId = reader["ITEMID"]?.ToString() ?? "";
+                    skippedRecords.Add((itemId, $"Error reading record {processedCount}: {ex.Message}"));
+                    continue;
+                }
+                if (record == null)
+                {
+                    skippedCount++;
+                    var itemId = reader["ITEMID"]?.ToString() ?? "";
+                    skippedRecords.Add((itemId, $"Skipped record {processedCount}: missing MaterialGroupId or ITEMCODE"));
+                    continue;
+                }
+                batch.Add(record);
+                // Process batch when it reaches the batch size or it's the last record
+                if (batch.Count >= BATCH_SIZE || processedCount == totalRecords)
+                {
+                    if (batch.Count > 0)
                     {
-                        batch.Add(record);
-                    }
-                    else
-                    {
-                        skippedCount++;
-                    }
-
-                    // Process batch when it reaches the batch size or it's the last record
-                    if (batch.Count >= BATCH_SIZE || processedCount == totalRecords)
-                    {
-                        if (batch.Count > 0)
-                        {
-                            progress.ReportProgress(processedCount, totalRecords, 
-                                $"Processing batch of {batch.Count} records (Total processed: {processedCount}, Inserted: {insertedCount})...", 
-                                stopwatch.Elapsed);
-                            
-                            int batchInserted = await InsertBatchAsync(pgConn, batch, transaction);
-                            insertedCount += batchInserted;
-                            
-                            progress.ReportProgress(processedCount, totalRecords, 
-                                $"Batch completed: {batchInserted} records inserted", stopwatch.Elapsed);
-                            
-                            batch.Clear();
-                        }
-                    }
-
-                    // Update progress periodically
-                    if (processedCount % PROGRESS_UPDATE_INTERVAL == 0 || processedCount == totalRecords)
-                    {
-                        var recordsPerSecond = processedCount / stopwatch.Elapsed.TotalSeconds;
-                        var eta = TimeSpan.FromSeconds((totalRecords - processedCount) / recordsPerSecond);
-                        
                         progress.ReportProgress(processedCount, totalRecords, 
-                            $"Processed: {processedCount:N0}/{totalRecords:N0} ({(processedCount * 100.0 / totalRecords):F1}%) | " +
-                            $"Inserted: {insertedCount:N0} | Skipped: {skippedCount:N0} | " +
-                            $"Speed: {recordsPerSecond:F0} rec/s | ETA: {eta:hh\\:mm\\:ss}", 
+                            $"Processing batch of {batch.Count} records (Total processed: {processedCount}, Inserted: {insertedCount})...", 
                             stopwatch.Elapsed);
+                        int batchInserted = await InsertBatchAsync(pgConn, batch, transaction);
+                        insertedCount += batchInserted;
+                        progress.ReportProgress(processedCount, totalRecords, 
+                            $"Batch completed: {batchInserted} records inserted", stopwatch.Elapsed);
+                        batch.Clear();
                     }
                 }
-                catch (Exception recordEx)
+
+                // Update progress periodically
+                if (processedCount % PROGRESS_UPDATE_INTERVAL == 0 || processedCount == totalRecords)
                 {
-                    progress.ReportError($"Error processing record {processedCount}: {recordEx.Message}", processedCount);
-                    throw new Exception($"Error processing record {processedCount} in Material Master Migration: {recordEx.Message}", recordEx);
+                    var recordsPerSecond = processedCount / stopwatch.Elapsed.TotalSeconds;
+                    var eta = TimeSpan.FromSeconds((totalRecords - processedCount) / recordsPerSecond);
+                    progress.ReportProgress(processedCount, totalRecords, 
+                        $"Processed: {processedCount:N0}/{totalRecords:N0} ({(processedCount * 100.0 / totalRecords):F1}%) | " +
+                        $"Inserted: {insertedCount:N0} | Skipped: {skippedCount:N0} | " +
+                        $"Speed: {recordsPerSecond:F0} rec/s | ETA: {eta:hh\\:mm\\:ss}", 
+                        stopwatch.Elapsed);
                 }
             }
         }
@@ -339,7 +336,6 @@ public class MaterialMasterMigration : MigrationService
         catch (Exception ex)
         {
             progress.ReportError($"Migration failed after processing {processedCount} records: {ex.Message}", processedCount);
-            
             if (ex.Message.Contains("reading from stream") || ex.Message.Contains("connection") || ex.Message.Contains("timeout"))
             {
                 throw new Exception($"SQL Server connection issue during Material Master Migration after processing {processedCount} records. " +
@@ -360,7 +356,17 @@ public class MaterialMasterMigration : MigrationService
 
         stopwatch.Stop();
         progress.ReportCompleted(processedCount, insertedCount, stopwatch.Elapsed);
-        
+
+        // Export migration stats and skipped records to Excel
+        MigrationStatsExporter.ExportToExcel(
+            "MaterialMasterMigration_Stats.xlsx",
+            totalRecords,
+            insertedCount,
+            skippedCount,
+            _logger,
+            skippedRecords
+        );
+
         return insertedCount;
     }
 
@@ -531,6 +537,7 @@ public class MaterialMasterMigration : MigrationService
         var batch = new List<MaterialRecord>();
         var validUomIds = await LoadValidUomIdsAsync(pgConn, transaction);
         var defaultUomId = await GetOrCreateDefaultUomAsync(pgConn, transaction);
+        var skippedRecords = new List<(string RecordId, string Reason)>();
         using var sqlCmd = new SqlCommand(SelectQuery, sqlConn);
         sqlCmd.CommandTimeout = 600;
         using var reader = await sqlCmd.ExecuteReaderAsync();
@@ -544,13 +551,17 @@ public class MaterialMasterMigration : MigrationService
             }
             catch (Exception ex)
             {
-                _migrationLogger.LogSkipped($"Error reading record {processedCount}: {ex.Message}", $"ITEMID={reader["ITEMID"]}");
+                var itemId = reader["ITEMID"]?.ToString() ?? "";
+                _migrationLogger.LogSkipped($"Error reading record {processedCount}: {ex.Message}", $"ITEMID={itemId}");
+                skippedRecords.Add((itemId, $"Error reading record: {ex.Message}"));
                 skippedCount++;
                 continue;
             }
             if (record == null)
             {
-                _migrationLogger.LogSkipped($"Skipped record {processedCount}: missing MaterialGroupId or ITEMCODE", $"ITEMID={reader["ITEMID"]}");
+                var itemId = reader["ITEMID"]?.ToString() ?? "";
+                _migrationLogger.LogSkipped($"Skipped record {processedCount}: missing MaterialGroupId or ITEMCODE", $"ITEMID={itemId}");
+                skippedRecords.Add((itemId, "Missing MaterialGroupId or ITEMCODE"));
                 skippedCount++;
                 continue;
             }
@@ -575,6 +586,16 @@ public class MaterialMasterMigration : MigrationService
         }
         stopwatch.Stop();
         _migrationLogger.LogInfo($"Migration completed. Total processed: {processedCount}, Inserted: {insertedCount}, Skipped: {skippedCount}");
+
+        // Export migration stats and skipped records to Excel
+        MigrationStatsExporter.ExportToExcel(
+            "MaterialMasterMigration_Stats.xlsx",
+            totalRecords,
+            insertedCount,
+            skippedCount,
+            _logger,
+            skippedRecords
+        );
         return insertedCount;
     }
 

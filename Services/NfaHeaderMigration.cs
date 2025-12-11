@@ -320,7 +320,7 @@ public class NfaHeaderMigration : MigrationService
             meeting_quality_requirement = EXCLUDED.meeting_quality_requirement,
             purchase_order_should_be_allotted_to_l1_supplier = EXCLUDED.purchase_order_should_be_allotted_to_l1_supplier,
             technically_appoved_justification = EXCLUDED.technically_appoved_justification,
-            commerclal_tc_justification = EXCLUDED.commerclal_tc_justification,
+            commerclal_tc_justification = EXCLUDED.commerclal.tc_justification,
             meeting_delivery_timeline_expectation_justification = EXCLUDED.meeting_delivery_timeline_expectation_justification,
             meeting_quality_requirement_justification = EXCLUDED.meeting_quality_requirement_justification,
             purchase_order_should_be_allotted_to_l1_supplier_justification = EXCLUDED.purchase_order_should_be_allotted_to_l1_supplier_justification,
@@ -503,6 +503,7 @@ public class NfaHeaderMigration : MigrationService
         int totalRecords = 0;
         int migratedRecords = 0;
         int skippedRecords = 0;
+        var skippedRecordList = new List<(string RecordId, string Reason)>();
 
         try
         {
@@ -540,6 +541,7 @@ public class NfaHeaderMigration : MigrationService
                 if (awardEventMainId == DBNull.Value)
                 {
                     skippedRecords++;
+                    skippedRecordList.Add(("", "AWARDEVENTMAINID is NULL"));
                     _logger.LogWarning("Skipping record - AWARDEVENTMAINID is NULL");
                     continue;
                 }
@@ -550,6 +552,7 @@ public class NfaHeaderMigration : MigrationService
                 if (processedIds.Contains(awardEventMainIdValue))
                 {
                     skippedRecords++;
+                    skippedRecordList.Add((awardEventMainIdValue.ToString(), "Duplicate AWARDEVENTMAINID"));
                     continue;
                 }
 
@@ -558,6 +561,7 @@ public class NfaHeaderMigration : MigrationService
                 if (vendorId == DBNull.Value || Convert.ToInt32(vendorId) == 0)
                 {
                     skippedRecords++;
+                    skippedRecordList.Add((awardEventMainIdValue.ToString(), "VendorId is NULL or 0"));
                     _logger.LogWarning($"Skipping record {awardEventMainIdValue} - VendorId is NULL or 0");
                     continue;
                 }
@@ -567,6 +571,7 @@ public class NfaHeaderMigration : MigrationService
                 if (!_validSupplierIds.Contains(vendorIdValue))
                 {
                     skippedRecords++;
+                    skippedRecordList.Add((awardEventMainIdValue.ToString(), $"VendorId {vendorIdValue} not found in supplier_master"));
                     _logger.LogWarning($"Skipping record {awardEventMainIdValue} - VendorId {vendorIdValue} not found in supplier_master");
                     continue;
                 }
@@ -576,6 +581,7 @@ public class NfaHeaderMigration : MigrationService
                 if (clientSAPId == DBNull.Value || Convert.ToInt32(clientSAPId) == 0)
                 {
                     skippedRecords++;
+                    skippedRecordList.Add((awardEventMainIdValue.ToString(), "ClientSAPId is NULL or 0"));
                     _logger.LogWarning($"Skipping record {awardEventMainIdValue} - ClientSAPId is NULL or 0");
                     continue;
                 }
@@ -729,6 +735,16 @@ public class NfaHeaderMigration : MigrationService
             }
 
             _logger.LogInformation($"NFA Header migration completed. Total: {totalRecords}, Migrated: {migratedRecords}, Skipped: {skippedRecords}");
+
+            // Export migration stats and skipped records to Excel
+            MigrationStatsExporter.ExportToExcel(
+                "NfaHeaderMigration_Stats.xlsx",
+                totalRecords,
+                migratedRecords,
+                skippedRecords,
+                _logger,
+                skippedRecordList
+            );
 
             return migratedRecords;
         }

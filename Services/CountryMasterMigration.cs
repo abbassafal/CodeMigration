@@ -75,10 +75,16 @@ public class CountryMasterMigration : MigrationService
             pgCmd.Transaction = transaction;
         }
 
+        int totalReadCount = 0;
+        int insertedCount = 0;
+        int skippedCount = 0;
+        var skippedRecords = new List<(string RecordId, string Reason)>();
+
         try
         {
             while (await reader.ReadAsync())
             {
+                totalReadCount++;
                 try
                 {
                     // Validate field values before processing
@@ -92,12 +98,16 @@ public class CountryMasterMigration : MigrationService
                     if (string.IsNullOrWhiteSpace(countryName))
                     {
                         migrationLogger.LogSkipped("Country_NAME is null or empty", recordId);
+                        skippedCount++;
+                        skippedRecords.Add((recordId, "Country_NAME is null or empty"));
                         continue;
                     }
 
                     if (string.IsNullOrWhiteSpace(countryCode))
                     {
                         migrationLogger.LogSkipped("Country_Shname is null or empty", recordId);
+                        skippedCount++;
+                        skippedRecords.Add((recordId, "Country_Shname is null or empty"));
                         continue;
                     }
 
@@ -117,13 +127,16 @@ public class CountryMasterMigration : MigrationService
                     if (result > 0)
                     {
                         migrationLogger.LogInserted(recordId);
+                        insertedCount++;
                     }
                 }
                 catch (Exception recordEx)
                 {
                     var countryMasterId = reader.IsDBNull(reader.GetOrdinal("CountryMasterID")) ? 0 : Convert.ToInt32(reader["CountryMasterID"]);
-                    migrationLogger.LogError($"Error processing record: {recordEx.Message}", $"ID={countryMasterId}", recordEx);
-                    throw new Exception($"Error processing record ID={countryMasterId} in Country Master Migration: {recordEx.Message}", recordEx);
+                    var recordId = $"ID={countryMasterId}";
+                    migrationLogger.LogError($"Error processing record: {recordEx.Message}", recordId, recordEx);
+                    skippedCount++;
+                    skippedRecords.Add((recordId, recordEx.Message));
                 }
             }
         }
@@ -149,8 +162,20 @@ public class CountryMasterMigration : MigrationService
         }
         
         var summary = migrationLogger.GetSummary();
-        _logger.LogInformation($"Country Master Migration completed. Inserted: {summary.TotalInserted}, Skipped: {summary.TotalSkipped}, Errors: {summary.TotalErrors}");
-        
-        return summary.TotalInserted;
+        _logger.LogInformation($"Country Master Migration completed. Inserted: {insertedCount}, Skipped: {skippedCount}, Errors: {summary.TotalErrors}");
+
+        // Export migration stats to Excel
+        var excelPath = Path.Combine("migration_outputs", $"CountryMasterMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+        MigrationStatsExporter.ExportToExcel(
+            excelPath,
+            totalReadCount,
+            insertedCount,
+            skippedCount,
+            _logger,
+            skippedRecords
+        );
+        _logger.LogInformation($"Migration stats exported to {excelPath}");
+
+        return insertedCount;
     }
 }

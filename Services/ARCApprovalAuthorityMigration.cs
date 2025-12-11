@@ -6,6 +6,7 @@ using Npgsql;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using DataMigration.Services;
+using ClosedXML.Excel;
 
 public class ARCApprovalAuthorityMigration : MigrationService
 {
@@ -61,12 +62,16 @@ public class ARCApprovalAuthorityMigration : MigrationService
 
         int insertedCount = 0;
         int skippedCount = 0;
+        int totalCount = 0;
         int batchNumber = 0;
         var batch = new List<Dictionary<string, object>>();
+        var skippedRecords = new List<(string RecordId, string Reason)>();
         using var selectCmd = new SqlCommand(SelectQuery, sqlConn);
         using var reader = await selectCmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
+            totalCount++;
+            var arcApprovalAuthorityId = reader.IsDBNull(reader.GetOrdinal("ARCApprovalAuthorityId")) ? "NULL" : reader["ARCApprovalAuthorityId"].ToString();
             var arcHeaderId = reader.IsDBNull(reader.GetOrdinal("ARCId")) ? (int?)null : Convert.ToInt32(reader["ARCId"]);
 
             // Skip record if foreign key is null or invalid
@@ -74,6 +79,7 @@ public class ARCApprovalAuthorityMigration : MigrationService
             {
                 _logger.LogWarning($"Skipping record: arc_header_id is NULL");
                 skippedCount++;
+                skippedRecords.Add((arcApprovalAuthorityId ?? "NULL", "arc_header_id is NULL"));
                 continue;
             }
             
@@ -81,6 +87,7 @@ public class ARCApprovalAuthorityMigration : MigrationService
             {
                 _logger.LogWarning($"Skipping record: arc_header_id={arcHeaderId} not found in arc_header");
                 skippedCount++;
+                skippedRecords.Add((arcApprovalAuthorityId ?? "NULL", $"arc_header_id={arcHeaderId} not found in arc_header"));
                 continue;
             }
 
@@ -134,6 +141,7 @@ public class ARCApprovalAuthorityMigration : MigrationService
             _logger.LogInformation($"Completed batch {batchNumber}. Total records inserted so far: {insertedCount}");
         }
         _logger.LogInformation($"Migration finished. Total records inserted: {insertedCount}, Skipped: {skippedCount}");
+        MigrationStatsExporter.ExportToExcel("migration_stats.xlsx", totalCount, insertedCount, skippedCount, _logger, skippedRecords);
         return insertedCount;
     }
 

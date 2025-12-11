@@ -113,6 +113,7 @@ namespace DataMigration.Services
 
             // Prepare flattened rows to bulk-insert
             var flattened = new List<TempRateRow>(capacity: sourceData.Count * validCompanyIds.Count);
+            var skippedRecords = new List<(string RecordId, string Reason)>();
 
             foreach (var src in sourceData)
             {
@@ -229,9 +230,21 @@ namespace DataMigration.Services
                     // If we can't use bulk merge, fall back to row-by-row
                     if (!canUseBulkMerge)
                     {
-                        await DoRowByRowUpsertAsync(pgConn, tx, flattened, cancellationToken);
+                        await DoRowByRowUpsertAsync(pgConn, tx, flattened, cancellationToken, skippedRecords);
                         await tx.CommitAsync(cancellationToken);
                         _migrationLogger.LogInfo($"Completed: {_migrationLogger.InsertedCount} inserted, {_migrationLogger.SkippedCount} skipped");
+                        // Export migration stats to Excel
+                        var summary = _migrationLogger?.GetSummary();
+                        var excelPath = Path.Combine("migration_outputs", $"ErpCurrencyExchangeRateMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+                        MigrationStatsExporter.ExportToExcel(
+                            excelPath,
+                            flattened.Count,
+                            summary?.TotalInserted ?? 0,
+                            summary?.TotalSkipped ?? skippedRecords.Count,
+                            _logger,
+                            skippedRecords
+                        );
+                        _logger.LogInformation($"Migration stats exported to {excelPath}");
                         return flattened.Count;
                     }
 
@@ -271,6 +284,19 @@ namespace DataMigration.Services
             }
 
             _migrationLogger.LogInfo($"Completed: {_migrationLogger.InsertedCount} inserted, {_migrationLogger.SkippedCount} skipped");
+            // Export migration stats to Excel
+            var summaryFinal = _migrationLogger?.GetSummary();
+            var excelPathFinal = Path.Combine("migration_outputs", $"ErpCurrencyExchangeRateMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+            MigrationStatsExporter.ExportToExcel(
+                excelPathFinal,
+                flattened.Count,
+                summaryFinal?.TotalInserted ?? migratedCount,
+                summaryFinal?.TotalSkipped ?? skippedRecords.Count,
+                _logger,
+                skippedRecords
+            );
+            _logger.LogInformation($"Migration stats exported to {excelPathFinal}");
+
             return migratedCount;
         }
 
@@ -297,7 +323,8 @@ namespace DataMigration.Services
             NpgsqlConnection pgConn,
             NpgsqlTransaction tx,
             List<TempRateRow> rows,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            List<(string RecordId, string Reason)> skippedRecords)
         {
             _migrationLogger?.LogInfo($"Performing row-by-row upsert for {rows.Count} rows...");
 
@@ -396,6 +423,7 @@ namespace DataMigration.Services
                         }
                     );
                     skipped++;
+                    skippedRecords.Add((recordId, ex.Message));
                 }
             }
 

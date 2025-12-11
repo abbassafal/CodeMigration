@@ -225,6 +225,21 @@ ON CONFLICT (event_boq_items_id) DO UPDATE SET
         }
 
         _migrationLogger?.LogInfo($"EventBoqItems migration completed. Inserted: {insertedCount}, Skipped: {skippedCount}");
+
+        // Export migration stats to Excel
+        var skippedLogEntries = _migrationLogger?.GetSkippedRecords() ?? new List<MigrationLogEntry>();
+        var skippedRecords = skippedLogEntries.Select(e => (e.RecordIdentifier, e.Message)).ToList();
+        var excelPath = Path.Combine("migration_outputs", $"EventBoqItemsMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+        MigrationStatsExporter.ExportToExcel(
+            excelPath,
+            insertedCount + skippedCount,
+            insertedCount,
+            skippedCount,
+            _logger,
+            skippedRecords
+        );
+        _logger?.LogInformation($"Migration stats exported to {excelPath}");
+
         return insertedCount;
     }
 

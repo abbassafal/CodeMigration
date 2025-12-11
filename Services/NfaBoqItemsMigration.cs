@@ -48,7 +48,8 @@ namespace DataMigration.Services
             }
 
             var migratedRecords = 0;
-            var skippedRecords = 0;
+            var skippedRecordsCount = 0;
+            var skippedRecords = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -187,7 +188,8 @@ namespace DataMigration.Services
                         if (!validErpPrLinesIds.Contains(record.PRTransId))
                         {
                             _logger.LogWarning($"Skipping SubItemID {record.SubItemID}: PRTransId={record.PRTransId} not found in erp_pr_lines");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.SubItemID.ToString(), $"PRTransId={record.PRTransId} not found in erp_pr_lines"));
                             continue;
                         }
 
@@ -195,7 +197,8 @@ namespace DataMigration.Services
                         if (!awardItemIdToNfaHeaderId.TryGetValue(record.AwardItemId, out var nfaHeaderId))
                         {
                             _logger.LogWarning($"Skipping SubItemID {record.SubItemID}: AwardItemId={record.AwardItemId} not found in lookup (Tbl_AwardEventItem)");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.SubItemID.ToString(), $"AwardItemId={record.AwardItemId} not found in lookup (Tbl_AwardEventItem)"));
                             continue;
                         }
 
@@ -203,7 +206,8 @@ namespace DataMigration.Services
                         if (!validNfaLineIds.Contains(record.AwardItemId))
                         {
                             _logger.LogWarning($"Skipping SubItemID {record.SubItemID}: AwardItemId={record.AwardItemId} not found in nfa_line");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.SubItemID.ToString(), $"AwardItemId={record.AwardItemId} not found in nfa_line"));
                             continue;
                         }
 
@@ -211,7 +215,8 @@ namespace DataMigration.Services
                         if (!itemIdToBoqQty.TryGetValue(record.ItemId, out var boqQty))
                         {
                             _logger.LogWarning($"Skipping SubItemID {record.SubItemID}: ItemId={record.ItemId} not found in tbl_PRBOQItems");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.SubItemID.ToString(), $"ItemId={record.ItemId} not found in tbl_PRBOQItems"));
                             continue;
                         }
 
@@ -219,7 +224,8 @@ namespace DataMigration.Services
                         if (!record.Rate.HasValue)
                         {
                             _logger.LogWarning($"Skipping SubItemID {record.SubItemID}: Rate is null");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.SubItemID.ToString(), "Rate is null"));
                             continue;
                         }
 
@@ -247,7 +253,8 @@ namespace DataMigration.Services
                     catch (Exception ex)
                     {
                         _logger.LogError($"Error processing SubItemID {record.SubItemID}: {ex.Message}");
-                        skippedRecords++;
+                        skippedRecordsCount++;
+                        skippedRecords.Add((record.SubItemID.ToString(), $"Error: {ex.Message}"));
                     }
                 }
 
@@ -256,7 +263,17 @@ namespace DataMigration.Services
                     await ExecuteInsertBatch(pgConnection, insertBatch);
                 }
 
-                _logger.LogInformation($"Migration completed. Migrated: {migratedRecords}, Skipped: {skippedRecords}");
+                _logger.LogInformation($"Migration completed. Migrated: {migratedRecords}, Skipped: {skippedRecordsCount}");
+
+                // Export migration stats and skipped records to Excel
+                MigrationStatsExporter.ExportToExcel(
+                    "NfaBoqItemsMigration_Stats.xlsx",
+                    sourceData.Count,
+                    migratedRecords,
+                    skippedRecordsCount,
+                    _logger,
+                    skippedRecords
+                );
             }
             catch (Exception ex)
             {

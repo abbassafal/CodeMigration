@@ -51,6 +51,7 @@ namespace DataMigration.Services
             var migratedRecords = 0;
             var skippedRecords = 0;
             var errors = new List<string>();
+            var skippedRecordDetails = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -160,6 +161,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogDebug($"Record skipped: SUPPLIER_ID or EVENTID is NULL");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.SUPPLIER_ID?.ToString() ?? "NULL", "SUPPLIER_ID or EVENTID is NULL"));
                             continue;
                         }
 
@@ -168,6 +170,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogDebug($"SUPPLIER_ID {record.SUPPLIER_ID}, EVENTID {record.EVENTID}: event_id not found in event_master (FK constraint violation)");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.SUPPLIER_ID?.ToString() ?? "NULL", $"event_id {record.EVENTID} not found in event_master"));
                             continue;
                         }
 
@@ -176,6 +179,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogDebug($"SUPPLIER_ID {record.SUPPLIER_ID}, EVENTID {record.EVENTID}: supplier_id not found in supplier_master (FK constraint violation)");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.SUPPLIER_ID?.ToString() ?? "NULL", $"supplier_id {record.SUPPLIER_ID} not found in supplier_master"));
                             continue;
                         }
 
@@ -234,6 +238,7 @@ namespace DataMigration.Services
                         _logger.LogError(errorMsg);
                         errors.Add(errorMsg);
                         skippedRecords++;
+                        skippedRecordDetails.Add((record.SUPPLIER_ID?.ToString() ?? "NULL", $"Exception: {ex.Message}"));
                     }
                 }
 
@@ -256,6 +261,14 @@ namespace DataMigration.Services
                 throw;
             }
 
+            MigrationStatsExporter.ExportToExcel(
+                "EventSupplierPriceBidMigration_Stats.xlsx",
+                migratedRecords + skippedRecords,
+                migratedRecords,
+                skippedRecords,
+                _logger,
+                skippedRecordDetails
+            );
             return migratedRecords;
         }
 
@@ -330,6 +343,7 @@ namespace DataMigration.Services
 
             var upsertedRecords = 0;
             var skippedRecords = 0;
+            var skippedRecordDetails = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -440,6 +454,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogWarning($"Skipping UPDATEID {record.MaxUpdateId}: SUPPLIER_ID or EVENTID is null");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.MaxUpdateId.ToString(), "SUPPLIER_ID or EVENTID is null"));
                             continue;
                         }
 
@@ -448,6 +463,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogWarning($"Skipping UPDATEID {record.MaxUpdateId}: event_id={record.EVENTID} not found in event_master");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.MaxUpdateId.ToString(), $"event_id={record.EVENTID} not found in event_master"));
                             continue;
                         }
 
@@ -456,6 +472,7 @@ namespace DataMigration.Services
                         {
                             _logger.LogWarning($"Skipping UPDATEID {record.MaxUpdateId}: supplier_id={record.SUPPLIER_ID} not found in supplier_master");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.MaxUpdateId.ToString(), $"supplier_id={record.SUPPLIER_ID} not found in supplier_master"));
                             continue;
                         }
 
@@ -493,21 +510,8 @@ namespace DataMigration.Services
                                 deleted_by,
                                 deleted_date
                             ) VALUES (
-                                @supplier_id,
-                                @event_id,
-                                @item_total,
-                                @total_tax_amount,
-                                @total_after_tax,
-                                @lot_total,
-                                @total_before_tax,
-                                @validity_days,
-                                NULL,
-                                CURRENT_TIMESTAMP,
-                                NULL,
-                                NULL,
-                                false,
-                                NULL,
-                                NULL
+                                @SupplierId, @EventId, @ItemTotal, @TotalTaxAmount, @TotalAfterTax, @LotTotal, @TotalBeforeTax, @ValidityDays,
+                                NULL, CURRENT_TIMESTAMP, NULL, NULL, FALSE, NULL, NULL
                             )
                             ON CONFLICT (event_id, supplier_id) DO UPDATE SET
                                 item_total = EXCLUDED.item_total,
@@ -517,28 +521,37 @@ namespace DataMigration.Services
                                 total_before_tax = EXCLUDED.total_before_tax,
                                 validity_days = EXCLUDED.validity_days,
                                 modified_by = NULL,
-                                modified_date = CURRENT_TIMESTAMP", pgConnection);
+                                modified_date = CURRENT_TIMESTAMP,
+                                is_deleted = FALSE,
+                                deleted_by = NULL,
+                                deleted_date = NULL
+", pgConnection);
 
-                        upsertCmd.Parameters.AddWithValue("@supplier_id", record.SUPPLIER_ID.Value);
-                        upsertCmd.Parameters.AddWithValue("@event_id", record.EVENTID.Value);
-                        upsertCmd.Parameters.AddWithValue("@item_total", itemTotal);
-                        upsertCmd.Parameters.AddWithValue("@total_tax_amount", totalTaxAmount);
-                        upsertCmd.Parameters.AddWithValue("@total_after_tax", totalAfterTax);
-                        upsertCmd.Parameters.AddWithValue("@lot_total", lotTotal);
-                        upsertCmd.Parameters.AddWithValue("@total_before_tax", totalBeforeTax);
-                        upsertCmd.Parameters.AddWithValue("@validity_days", (object?)validityDays ?? DBNull.Value);
+                        upsertCmd.Parameters.AddWithValue("@SupplierId", record.SUPPLIER_ID.Value);
+                        upsertCmd.Parameters.AddWithValue("@EventId", record.EVENTID.Value);
+                        upsertCmd.Parameters.AddWithValue("@ItemTotal", itemTotal);
+                        upsertCmd.Parameters.AddWithValue("@TotalTaxAmount", totalTaxAmount);
+                        upsertCmd.Parameters.AddWithValue("@TotalAfterTax", totalAfterTax);
+                        upsertCmd.Parameters.AddWithValue("@LotTotal", lotTotal);
+                        upsertCmd.Parameters.AddWithValue("@TotalBeforeTax", totalBeforeTax);
+                        upsertCmd.Parameters.AddWithValue("@ValidityDays", (object?)validityDays ?? DBNull.Value);
 
-                        await upsertCmd.ExecuteNonQueryAsync();
-                        upsertedRecords++;
-
-                        if (upsertedRecords % 100 == 0)
+                        try
                         {
-                            _logger.LogInformation($"Processed {upsertedRecords} UPSERT operations...");
+                            var rowsAffected = await upsertCmd.ExecuteNonQueryAsync();
+                            _logger.LogDebug($"UPSERT for UPDATEID {record.MaxUpdateId} affected {rowsAffected} rows");
+                            upsertedRecords++;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError($"Error during UPSERT for UPDATEID {record.MaxUpdateId}: {ex.Message}");
+                            skippedRecords++;
+                            skippedRecordDetails.Add((record.MaxUpdateId.ToString(), $"Error: {ex.Message}"));
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"UPDATEID {record.MaxUpdateId} (Supplier: {record.SUPPLIER_ID}, Event: {record.EVENTID}): {ex.Message}");
+                        _logger.LogError(ex, $"Unexpected error processing record: {ex.Message}");
                         skippedRecords++;
                     }
                 }
@@ -547,24 +560,22 @@ namespace DataMigration.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "UPSERT migration failed");
+                _logger.LogError(ex, "Migration failed");
                 throw;
             }
 
             return upsertedRecords;
         }
 
-        private class SourceRow
-        {
+        // Define row classes inside the migration class
+        private class SourceRow {
             public int? SUPPLIER_ID { get; set; }
             public int? EVENTID { get; set; }
             public decimal ItemTotal { get; set; }
             public decimal TotalGSTAmount { get; set; }
             public decimal SubTotal { get; set; }
         }
-
-        private class TargetRow
-        {
+        private class TargetRow {
             public int SupplierId { get; set; }
             public int EventId { get; set; }
             public decimal ItemTotal { get; set; }
@@ -574,9 +585,7 @@ namespace DataMigration.Services
             public decimal TotalBeforeTax { get; set; }
             public DateTime? ValidityDays { get; set; }
         }
-
-        private class AucSupplierRow
-        {
+        private class AucSupplierRow {
             public int? SUPPLIER_ID { get; set; }
             public int? EVENTID { get; set; }
             public decimal ItemTotal { get; set; }

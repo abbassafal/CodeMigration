@@ -201,6 +201,7 @@ public class CompanyMasterMigration : MigrationService
         int insertedCount = 0;
         int skippedCount = 0;
         int totalReadCount = 0;
+        var skippedRecords = new List<(string RecordId, string Reason)>();
 
         while (await reader.ReadAsync())
         {
@@ -256,7 +257,9 @@ public class CompanyMasterMigration : MigrationService
             catch (Exception ex)
             {
                 skippedCount++;
-                Console.WriteLine($"❌ Error migrating ClientSAPId {reader["ClientSAPId"]}: {ex.Message}");
+                var recordId = reader["ClientSAPId"]?.ToString() ?? "(null)";
+                skippedRecords.Add((recordId, ex.Message));
+                Console.WriteLine($"❌ Error migrating ClientSAPId {recordId}: {ex.Message}");
                 Console.WriteLine($"   Stack Trace: {ex.StackTrace}");
                 if (ex.InnerException != null)
                 {
@@ -274,6 +277,18 @@ public class CompanyMasterMigration : MigrationService
         {
             Console.WriteLine($"\n⚠️  WARNING: No records found in TBL_CLIENTSAPMASTER table!");
         }
+
+        // Export migration stats to Excel
+        var excelPath = Path.Combine("migration_outputs", $"CompanyMasterMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+        MigrationStatsExporter.ExportToExcel(
+            excelPath,
+            totalReadCount,
+            insertedCount,
+            skippedCount,
+            _logger,
+            skippedRecords
+        );
+        Console.WriteLine($"📁 Migration stats exported to {excelPath}");
 
         return insertedCount;
     }

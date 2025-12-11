@@ -177,12 +177,17 @@ public class ARCSubMigration : MigrationService
         var validUserIds = await LoadValidIdsAsync(pgConn, "users", "user_id");
         
         int insertedCount = 0;
+        int skippedCount = 0;
+        int totalCount = 0;
         int batchNumber = 0;
         var batch = new List<Dictionary<string, object>>();
+        var skippedRecords = new List<(string RecordId, string Reason)>();
         using var selectCmd = new SqlCommand(SelectQuery, sqlConn);
         using var reader = await selectCmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
+            totalCount++;
+            var arcSubId = reader["ARCSubId"]?.ToString() ?? "NULL";
             // Validate created_by and modified_by
             var createdBy = reader.IsDBNull(reader.GetOrdinal("CreatedBy")) ? (int?)null : Convert.ToInt32(reader["CreatedBy"]);
             var updatedBy = reader.IsDBNull(reader.GetOrdinal("UpdatedBy")) ? (int?)null : Convert.ToInt32(reader["UpdatedBy"]);
@@ -254,7 +259,8 @@ public class ARCSubMigration : MigrationService
             insertedCount += await InsertBatchAsync(pgConn, batch, transaction, batchNumber);
             _logger.LogInformation($"Completed batch {batchNumber}. Total records inserted so far: {insertedCount}");
         }
-        _logger.LogInformation($"Migration finished. Total records inserted: {insertedCount}");
+        _logger.LogInformation($"Migration finished. Total records inserted: {insertedCount}, Skipped: {skippedCount}");
+        MigrationStatsExporter.ExportToExcel("arc_sub_migration_stats.xlsx", totalCount, insertedCount, skippedCount, _logger, skippedRecords);
         return insertedCount;
     }
 

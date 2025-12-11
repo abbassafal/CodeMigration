@@ -276,6 +276,21 @@ ON CONFLICT (event_collaboration_id) DO UPDATE SET
         }
 
         _logger.LogInformation($"EventCollaboration migration completed. Inserted: {insertedCount}, Skipped: {skippedCount}");
+
+        // Export migration stats to Excel
+        var skippedLogEntries = _migrationLogger?.GetSkippedRecords() ?? new List<MigrationLogEntry>();
+        var skippedRecords = skippedLogEntries.Select(e => (e.RecordIdentifier, e.Message)).ToList();
+        var excelPath = Path.Combine("migration_outputs", $"EventCollaborationMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+        MigrationStatsExporter.ExportToExcel(
+            excelPath,
+            insertedCount + skippedCount,
+            insertedCount,
+            skippedCount,
+            _logger,
+            skippedRecords
+        );
+        _logger.LogInformation($"Migration stats exported to {excelPath}");
+
         return insertedCount;
     }
 

@@ -48,7 +48,8 @@ namespace DataMigration.Services
             }
 
             var migratedRecords = 0;
-            var skippedRecords = 0;
+            var skippedRecordsCount = 0;
+            var skippedRecords = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -132,7 +133,8 @@ namespace DataMigration.Services
                         if (!record.NFAId.HasValue)
                         {
                             _logger.LogWarning($"Skipping NFAChatId {record.NFAChatId}: NFAId is null");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.NFAChatId.ToString(), "NFAId is null"));
                             continue;
                         }
 
@@ -140,7 +142,8 @@ namespace DataMigration.Services
                         if (string.IsNullOrWhiteSpace(record.ClarificationRemarks))
                         {
                             _logger.LogWarning($"Skipping NFAChatId {record.NFAChatId}: ClarificationRemarks is null/empty");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.NFAChatId.ToString(), "ClarificationRemarks is null/empty"));
                             continue;
                         }
 
@@ -171,7 +174,8 @@ namespace DataMigration.Services
                         if (!toUserIdArray.Any() && !messageSentToAllUser)
                         {
                             _logger.LogWarning($"Skipping NFAChatId {record.NFAChatId}: to_user_id array is empty and message not sent to all");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.NFAChatId.ToString(), "to_user_id array is empty and message not sent to all"));
                             continue;
                         }
 
@@ -199,7 +203,8 @@ namespace DataMigration.Services
                     catch (Exception ex)
                     {
                         _logger.LogError($"Error processing NFAChatId {record.NFAChatId}: {ex.Message}");
-                        skippedRecords++;
+                        skippedRecordsCount++;
+                        skippedRecords.Add((record.NFAChatId.ToString(), $"Error: {ex.Message}"));
                     }
                 }
 
@@ -208,7 +213,17 @@ namespace DataMigration.Services
                     await ExecuteInsertBatch(pgConnection, insertBatch);
                 }
 
-                _logger.LogInformation($"Migration completed. Migrated: {migratedRecords}, Skipped: {skippedRecords}");
+                _logger.LogInformation($"Migration completed. Migrated: {migratedRecords}, Skipped: {skippedRecordsCount}");
+
+                // Export migration stats and skipped records to Excel
+                MigrationStatsExporter.ExportToExcel(
+                    "NfaClarificationMigration_Stats.xlsx",
+                    sourceData.Count,
+                    migratedRecords,
+                    skippedRecordsCount,
+                    _logger,
+                    skippedRecords
+                );
             }
             catch (Exception ex)
             {

@@ -65,51 +65,59 @@ public class ARCPlantMigration : MigrationService
         // Note: No need to load validUserIds as TBL_ARCPlant doesn't have CreatedBy column
 
         int insertedCount = 0;
+        int skippedCount = 0;
+        int totalCount = 0;
         int batchNumber = 0;
         var batch = new List<Dictionary<string, object>>();
+        var skippedRecords = new List<(string RecordId, string Reason)>();
         using var selectCmd = new SqlCommand(SelectQuery, sqlConn);
         using var reader = await selectCmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
+            totalCount++;
+            var arcPlantId = reader.IsDBNull(reader.GetOrdinal("ARCPlantId")) ? "Unknown" : reader["ARCPlantId"].ToString();
             var plantId = reader.IsDBNull(reader.GetOrdinal("Plant")) ? (int?)null : Convert.ToInt32(reader["Plant"]);
             var arcHeaderId = reader.IsDBNull(reader.GetOrdinal("ARCMainId")) ? (int?)null : Convert.ToInt32(reader["ARCMainId"]);
             var paymentTermId = reader.IsDBNull(reader.GetOrdinal("PaymentTerm")) ? (int?)null : Convert.ToInt32(reader["PaymentTerm"]);
             var incotermId = reader.IsDBNull(reader.GetOrdinal("IncoTerm")) ? (int?)null : Convert.ToInt32(reader["IncoTerm"]);
             var supplierId = reader.IsDBNull(reader.GetOrdinal("AssignDistributor")) ? (int?)null : Convert.ToInt32(reader["AssignDistributor"]);
 
-            // Get ARCPlantId for logging
-            var arcPlantId = reader.IsDBNull(reader.GetOrdinal("ARCPlantId")) ? "Unknown" : reader["ARCPlantId"].ToString();
-
             // Skip record if any foreign key is invalid
             bool skipRecord = false;
             if (plantId.HasValue && !validPlantIds.Contains(plantId.Value))
             {
                 migrationLogger.LogSkipped($"plant_id={plantId} not found in plant_master", arcPlantId);
+                skippedRecords.Add((arcPlantId ?? "Unknown", $"plant_id={plantId} not found in plant_master"));
                 skipRecord = true;
             }
             if (arcHeaderId.HasValue && !validArcHeaderIds.Contains(arcHeaderId.Value))
             {
                 migrationLogger.LogSkipped($"arc_header_id={arcHeaderId} not found in arc_header", arcPlantId);
+                skippedRecords.Add((arcPlantId ?? "Unknown", $"arc_header_id={arcHeaderId} not found in arc_header"));
                 skipRecord = true;
             }
             if (paymentTermId.HasValue && !validPaymentTermIds.Contains(paymentTermId.Value))
             {
                 migrationLogger.LogSkipped($"payment_term_id={paymentTermId} not found in payment_term_master", arcPlantId);
+                skippedRecords.Add((arcPlantId ?? "Unknown", $"payment_term_id={paymentTermId} not found in payment_term_master"));
                 skipRecord = true;
             }
             if (incotermId.HasValue && !validIncotermIds.Contains(incotermId.Value))
             {
                 migrationLogger.LogSkipped($"incoterm_id={incotermId} not found in incoterm_master", arcPlantId);
+                skippedRecords.Add((arcPlantId ?? "Unknown", $"incoterm_id={incotermId} not found in incoterm_master"));
                 skipRecord = true;
             }
             if (supplierId.HasValue && !validSupplierIds.Contains(supplierId.Value))
             {
                 migrationLogger.LogSkipped($"supplier_id={supplierId} not found in supplier_master", arcPlantId);
+                skippedRecords.Add((arcPlantId ?? "Unknown", $"supplier_id={supplierId} not found in supplier_master"));
                 skipRecord = true;
             }
 
             if (skipRecord)
             {
+                skippedCount++;
                 continue;
             }
 
@@ -155,6 +163,7 @@ public class ARCPlantMigration : MigrationService
         
         var summary = migrationLogger.GetSummary();
         _logger.LogInformation($"ARCPlant migration finished. {summary}");
+        MigrationStatsExporter.ExportToExcel("arc_plant_migration_stats.xlsx", totalCount, insertedCount, skippedCount, _logger, skippedRecords);
         return insertedCount;
     }
 

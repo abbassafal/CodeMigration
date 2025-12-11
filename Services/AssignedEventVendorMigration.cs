@@ -169,11 +169,12 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
         using var reader = await selectCmd.ExecuteReaderAsync();
 
         int processedCount = 0;
+        var skippedRecords = new List<(string RecordId, string Reason)>();
 
         while (await reader.ReadAsync())
         {
             processedCount++;
-            var eventSelUserId = reader["EVENTSELUSERID"] ?? DBNull.Value;
+            var eventSelUserId = reader["EVENTSELUSERID"]?.ToString() ?? "NULL";
             var eventId = reader["EVENTID"] ?? DBNull.Value;
             var userId = reader["USERID"] ?? DBNull.Value;
 
@@ -184,6 +185,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             {
                 _migrationLogger.LogSkipped("EVENTID is NULL", recordId, new Dictionary<string, object> { { "EVENTID", eventId } });
                 skippedCount++;
+                skippedRecords.Add((eventSelUserId, "EVENTID is NULL"));
                 continue;
             }
 
@@ -192,6 +194,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             {
                 _migrationLogger.LogSkipped($"EVENTID {eventIdValue} not found in event_master", recordId, new Dictionary<string, object> { { "EVENTID", eventIdValue } });
                 skippedCount++;
+                skippedRecords.Add((eventSelUserId, $"EVENTID {eventIdValue} not found in event_master"));
                 continue;
             }
 
@@ -199,6 +202,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             {
                 _migrationLogger.LogSkipped("USERID is NULL", recordId, new Dictionary<string, object> { { "USERID", userId } });
                 skippedCount++;
+                skippedRecords.Add((eventSelUserId, "USERID is NULL"));
                 continue;
             }
 
@@ -207,6 +211,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             {
                 _migrationLogger.LogSkipped($"USERID {userIdValue} not found in supplier_master", recordId, new Dictionary<string, object> { { "USERID", userIdValue } });
                 skippedCount++;
+                skippedRecords.Add((eventSelUserId, $"USERID {userIdValue} not found in supplier_master"));
                 continue;
             }
 
@@ -273,6 +278,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
         }
 
         _migrationLogger.LogInfo($"AssignedEventVendor migration completed. Inserted: {insertedCount}, Skipped: {skippedCount}");
+        MigrationStatsExporter.ExportToExcel("assigned_event_vendor_migration_stats.xlsx", processedCount, insertedCount, skippedCount, _logger, skippedRecords);
         return insertedCount;
     }
 

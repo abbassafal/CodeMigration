@@ -216,10 +216,12 @@ public class ARCMainMigration : MigrationService
         int insertedCount = 0;
         int skippedCount = 0;
         int totalReadCount = 0;
+        var skippedRecords = new List<(string RecordId, string Reason)>();
 
         while (await reader.ReadAsync())
         {
             totalReadCount++;
+            var arcMainId = reader["ARCMainId"]?.ToString() ?? "NULL";
             if (totalReadCount == 1)
             {
                 Console.WriteLine($"✓ Found records! Processing...");
@@ -245,10 +247,10 @@ public class ARCMainMigration : MigrationService
                 using var pgCmd = new NpgsqlCommand(InsertQuery, pgConn);
                 pgCmd.Transaction = transaction;
 
-                var arcMainId = reader["ARCMainId"];
-                Console.WriteLine($"Processing ARCMainId: {arcMainId}");
+                var arcMainIdValue = reader["ARCMainId"];
+                Console.WriteLine($"Processing ARCMainId: {arcMainIdValue}");
 
-                pgCmd.Parameters.AddWithValue("@arc_header_id", arcMainId ?? DBNull.Value);
+                pgCmd.Parameters.AddWithValue("@arc_header_id", arcMainIdValue ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@arc_name", reader["ARCName"] ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@arc_number", reader["ARCNo"] ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@arc_description", reader["ARCDescription"] ?? DBNull.Value);
@@ -297,9 +299,9 @@ public class ARCMainMigration : MigrationService
                 pgCmd.Parameters.AddWithValue("@deleted_by", DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@deleted_date", DBNull.Value);
 
-                Console.WriteLine($"Executing INSERT for ARCMainId: {arcMainId}");
+                Console.WriteLine($"Executing INSERT for ARCMainId: {arcMainIdValue}");
                 int result = await pgCmd.ExecuteNonQueryAsync();
-                Console.WriteLine($"Insert result for ARCMainId {arcMainId}: {result} row(s) affected");
+                Console.WriteLine($"Insert result for ARCMainId {arcMainIdValue}: {result} row(s) affected");
 
                 // Insert into arc_header_history as well
                 var historyInsert = @"
@@ -371,13 +373,13 @@ public class ARCMainMigration : MigrationService
                         }
                     }
                     int historyResult = await historyCmd.ExecuteNonQueryAsync();
-                    Console.WriteLine($"Insert into arc_header_history for ARCMainId {arcMainId}: {historyResult} row(s) affected");
+                    Console.WriteLine($"Insert into arc_header_history for ARCMainId {arcMainIdValue}: {historyResult} row(s) affected");
                 }
 
                 if (result > 0) 
                 {
                     insertedCount++;
-                    Console.WriteLine($"✓ Successfully inserted ARCMainId: {arcMainId}");
+                    Console.WriteLine($"✓ Successfully inserted ARCMainId: {arcMainIdValue}");
                     
                     // Release savepoint if successful
                     if (transaction != null)
@@ -388,13 +390,14 @@ public class ARCMainMigration : MigrationService
                 }
                 else
                 {
-                    Console.WriteLine($"⚠️  Warning: INSERT returned 0 rows for ARCMainId: {arcMainId}");
+                    Console.WriteLine($"⚠️  Warning: INSERT returned 0 rows for ARCMainId: {arcMainIdValue}");
                 }
             }
             catch (Exception ex)
             {
                 skippedCount++;
-                Console.WriteLine($"❌ Error migrating ARCMainId {reader["ARCMainId"]}: {ex.Message}");
+                Console.WriteLine($"❌ Error migrating ARCMainId {arcMainId}: {ex.Message}");
+                skippedRecords.Add((arcMainId, ex.Message));
                 
                 // Rollback to savepoint if we have a transaction
                 if (transaction != null)
@@ -403,7 +406,7 @@ public class ARCMainMigration : MigrationService
                     {
                         await using var rollbackCmd = new NpgsqlCommand($"ROLLBACK TO SAVEPOINT {savepointName}", pgConn, transaction);
                         await rollbackCmd.ExecuteNonQueryAsync();
-                        Console.WriteLine($"   Rolled back to savepoint for ARCMainId {reader["ARCMainId"]}");
+                        Console.WriteLine($"   Rolled back to savepoint for ARCMainId {arcMainId}");
                     }
                     catch (Exception rollbackEx)
                     {
@@ -419,6 +422,7 @@ public class ARCMainMigration : MigrationService
         Console.WriteLine($"   Total records read: {totalReadCount}");
         Console.WriteLine($"   ✓ Successfully inserted: {insertedCount}");
         Console.WriteLine($"   ❌ Skipped (errors): {skippedCount}");
+        MigrationStatsExporter.ExportToExcel("arc_main_migration_stats.xlsx", totalReadCount, insertedCount, skippedCount, _logger, skippedRecords);
         
         if (totalReadCount == 0)
         {

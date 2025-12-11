@@ -47,8 +47,8 @@ namespace DataMigration.Services
 
         public async Task<int> MigrateAsync()
         {
-        _migrationLogger = new MigrationLogger(_logger, "event_supplier_line_item");
-        _migrationLogger.LogInfo("Starting migration");
+            _migrationLogger = new MigrationLogger(_logger, "event_supplier_line_item");
+            _migrationLogger.LogInfo("Starting migration");
 
             var sqlConnectionString = _configuration.GetConnectionString("SqlServer");
             var pgConnectionString = _configuration.GetConnectionString("PostgreSql");
@@ -61,6 +61,7 @@ namespace DataMigration.Services
             var migratedRecords = 0;
             var skippedRecords = 0;
             var errors = new List<string>();
+            var skippedRecordDetails = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -215,24 +216,30 @@ namespace DataMigration.Services
                         // Validate required fields
                         if (!record.EVENTID.HasValue || !record.SUPPLIER_ID.HasValue)
                         {
-                            _logger.LogDebug($"PBID {record.PBID}: EVENTID or SUPPLIER_ID is NULL, skipping");
+                            var reason = $"EVENTID or SUPPLIER_ID is NULL, skipping";
+                            _logger.LogDebug($"PBID {record.PBID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PBID.ToString(), reason));
                             continue;
                         }
 
                         // Validate event_id exists
                         if (!validEventIds.Contains(record.EVENTID.Value))
                         {
-                            _logger.LogDebug($"PBID {record.PBID}: event_id {record.EVENTID.Value} not found in event_master");
+                            var reason = $"event_id {record.EVENTID.Value} not found in event_master";
+                            _logger.LogDebug($"PBID {record.PBID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PBID.ToString(), reason));
                             continue;
                         }
 
                         // Validate supplier_id exists
                         if (!validSupplierIds.Contains(record.SUPPLIER_ID.Value))
                         {
-                            _logger.LogDebug($"PBID {record.PBID}: supplier_id {record.SUPPLIER_ID.Value} not found in supplier_master");
+                            var reason = $"supplier_id {record.SUPPLIER_ID.Value} not found in supplier_master";
+                            _logger.LogDebug($"PBID {record.PBID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PBID.ToString(), reason));
                             continue;
                         }
 
@@ -243,29 +250,34 @@ namespace DataMigration.Services
                             var key = (record.EVENTID.Value, record.PRTRANSID.Value);
                             if (eventItemIdMap.TryGetValue(key, out var itemId))
                             {
-                                // Validate that the event_item_id exists in PostgreSQL
                                 if (validEventItemIds.Contains(itemId))
                                 {
                                     eventItemId = itemId;
                                 }
                                 else
                                 {
-                                    _logger.LogDebug($"PBID {record.PBID}: event_item_id {itemId} not found in event_items table (FK constraint), skipping record");
+                                    var reason = $"event_item_id {itemId} not found in event_items table (FK constraint), skipping record";
+                                    _logger.LogDebug($"PBID {record.PBID}: {reason}");
                                     skippedRecords++;
+                                    skippedRecordDetails.Add((record.PBID.ToString(), reason));
                                     continue;
                                 }
                             }
                             else
                             {
-                                _logger.LogDebug($"PBID {record.PBID}: No event_item_id mapping found for EVENTID {record.EVENTID.Value}, PRTRANSID {record.PRTRANSID.Value}, skipping record");
+                                var reason = $"No event_item_id mapping found for EVENTID {record.EVENTID.Value}, PRTRANSID {record.PRTRANSID.Value}, skipping record";
+                                _logger.LogDebug($"PBID {record.PBID}: {reason}");
                                 skippedRecords++;
+                                skippedRecordDetails.Add((record.PBID.ToString(), reason));
                                 continue;
                             }
                         }
                         else
                         {
-                            _logger.LogDebug($"PBID {record.PBID}: PRTRANSID is NULL, cannot lookup event_item_id, skipping record");
+                            var reason = $"PRTRANSID is NULL, cannot lookup event_item_id, skipping record";
+                            _logger.LogDebug($"PBID {record.PBID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PBID.ToString(), reason));
                             continue;
                         }
 
@@ -278,24 +290,30 @@ namespace DataMigration.Services
                         }
                         else
                         {
-                            _logger.LogDebug($"PBID {record.PBID}: No event_supplier_price_bid_id found for SUPPLIER_ID {record.SUPPLIER_ID.Value}, EVENTID {record.EVENTID.Value}, skipping record");
+                            var reason = $"No event_supplier_price_bid_id found for SUPPLIER_ID {record.SUPPLIER_ID.Value}, EVENTID {record.EVENTID.Value}, skipping record";
+                            _logger.LogDebug($"PBID {record.PBID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PBID.ToString(), reason));
                             continue;
                         }
 
                         // Validate erp_pr_lines_id (NOT NULL - skip if NULL)
                         if (!record.PRTRANSID.HasValue)
                         {
-                            _logger.LogDebug($"PBID {record.PBID}: erp_pr_lines_id (PRTRANSID) is NULL (NOT NULL constraint), skipping record");
+                            var reason = $"erp_pr_lines_id (PRTRANSID) is NULL (NOT NULL constraint), skipping record";
+                            _logger.LogDebug($"PBID {record.PBID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PBID.ToString(), reason));
                             continue;
                         }
 
                         // Validate tax_master_id (NOT NULL - skip if NULL)
                         if (!record.GSTID.HasValue)
                         {
-                            _logger.LogDebug($"PBID {record.PBID}: tax_master_id (GSTID) is NULL (NOT NULL constraint), skipping record");
+                            var reason = $"tax_master_id (GSTID) is NULL (NOT NULL constraint), skipping record";
+                            _logger.LogDebug($"PBID {record.PBID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.PBID.ToString(), reason));
                             continue;
                         }
 
@@ -365,6 +383,7 @@ namespace DataMigration.Services
                         _logger.LogError(errorMsg);
                         errors.Add(errorMsg);
                         skippedRecords++;
+                        skippedRecordDetails.Add((record.PBID.ToString(), ex.Message));
                     }
                 }
 
@@ -380,6 +399,15 @@ namespace DataMigration.Services
                 {
                     _logger.LogWarning($"Encountered {errors.Count} errors during migration");
                 }
+                // Export migration stats to Excel
+                MigrationStatsExporter.ExportToExcel(
+                    "EventSupplierLineItemMigration_Stats.xlsx",
+                    migratedRecords + skippedRecords,
+                    migratedRecords,
+                    skippedRecords,
+                    _logger,
+                    skippedRecordDetails
+                );
             }
             catch (Exception ex)
             {
@@ -533,6 +561,7 @@ namespace DataMigration.Services
             var upsertedRecords = 0;
             var skippedRecords = 0;
             var errors = new List<string>();
+            var skippedRecordDetails = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -686,24 +715,30 @@ namespace DataMigration.Services
                         // Validate required fields for upsert key
                         if (!record.EVENTID.HasValue || !record.SUPPLIER_ID.HasValue || !record.PRTRANSID.HasValue)
                         {
-                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: EVENTID, SUPPLIER_ID, or PRTRANSID is NULL, cannot form unique key, skipping");
+                            var reason = $"EVENTID, SUPPLIER_ID, or PRTRANSID is NULL, cannot form unique key, skipping";
+                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.UPDATEID.ToString(), reason));
                             continue;
                         }
 
                         // Validate event_id exists
                         if (!validEventIds.Contains(record.EVENTID.Value))
                         {
-                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: event_id {record.EVENTID.Value} not found in event_master");
+                            var reason = $"event_id {record.EVENTID.Value} not found in event_master";
+                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.UPDATEID.ToString(), reason));
                             continue;
                         }
 
                         // Validate supplier_id exists
                         if (!validSupplierIds.Contains(record.SUPPLIER_ID.Value))
                         {
-                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: supplier_id {record.SUPPLIER_ID.Value} not found in supplier_master");
+                            var reason = $"supplier_id {record.SUPPLIER_ID.Value} not found in supplier_master";
+                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.UPDATEID.ToString(), reason));
                             continue;
                         }
 
@@ -712,22 +747,25 @@ namespace DataMigration.Services
                         var key = (record.EVENTID.Value, record.PRTRANSID.Value);
                         if (eventItemIdMap.TryGetValue(key, out var itemId))
                         {
-                            // Validate that the event_item_id exists in PostgreSQL
                             if (validEventItemIds.Contains(itemId))
                             {
                                 eventItemId = itemId;
                             }
                             else
                             {
-                                _logger.LogDebug($"UPDATEID {record.UPDATEID}: event_item_id {itemId} not found in event_items table (FK constraint), skipping record");
+                                var reason = $"event_item_id {itemId} not found in event_items table (FK constraint), skipping record";
+                                _logger.LogDebug($"UPDATEID {record.UPDATEID}: {reason}");
                                 skippedRecords++;
+                                skippedRecordDetails.Add((record.UPDATEID.ToString(), reason));
                                 continue;
                             }
                         }
                         else
                         {
-                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: No event_item_id mapping found for EVENTID {record.EVENTID.Value}, PRTRANSID {record.PRTRANSID.Value}, skipping record");
+                            var reason = $"No event_item_id mapping found for EVENTID {record.EVENTID.Value}, PRTRANSID {record.PRTRANSID.Value}, skipping record";
+                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.UPDATEID.ToString(), reason));
                             continue;
                         }
 
@@ -740,16 +778,20 @@ namespace DataMigration.Services
                         }
                         else
                         {
-                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: No event_supplier_price_bid_id found for SUPPLIER_ID {record.SUPPLIER_ID.Value}, EVENTID {record.EVENTID.Value}, skipping record");
+                            var reason = $"No event_supplier_price_bid_id found for SUPPLIER_ID {record.SUPPLIER_ID.Value}, EVENTID {record.EVENTID.Value}, skipping record";
+                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.UPDATEID.ToString(), reason));
                             continue;
                         }
 
                         // Validate tax_master_id (NOT NULL - skip if NULL)
                         if (!record.GSTID.HasValue)
                         {
-                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: tax_master_id (GSTID) is NULL (NOT NULL constraint), skipping record");
+                            var reason = $"tax_master_id (GSTID) is NULL (NOT NULL constraint), skipping record";
+                            _logger.LogDebug($"UPDATEID {record.UPDATEID}: {reason}");
                             skippedRecords++;
+                            skippedRecordDetails.Add((record.UPDATEID.ToString(), reason));
                             continue;
                         }
 
@@ -846,15 +888,24 @@ namespace DataMigration.Services
                         _logger.LogError(errorMsg);
                         errors.Add(errorMsg);
                         skippedRecords++;
+                        skippedRecordDetails.Add((record.UPDATEID.ToString(), ex.Message));
                     }
                 }
 
                 _logger.LogInformation($"Auction UPSERT completed. Upserted: {upsertedRecords}, Skipped: {skippedRecords}");
-                
                 if (errors.Any())
                 {
                     _logger.LogWarning($"Encountered {errors.Count} errors during auction upsert");
                 }
+                // Export upsert stats to Excel
+                MigrationStatsExporter.ExportToExcel(
+                    "EventSupplierLineItemAuctionUpsert_Stats.xlsx",
+                    upsertedRecords + skippedRecords,
+                    upsertedRecords,
+                    skippedRecords,
+                    _logger,
+                    skippedRecordDetails
+                );
             }
             catch (Exception ex)
             {

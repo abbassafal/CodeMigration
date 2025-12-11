@@ -51,6 +51,7 @@ namespace DataMigration.Services
 
             var migratedRecords = 0;
             var skippedRecords = 0;
+            var skippedDetails = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -144,6 +145,7 @@ namespace DataMigration.Services
                                 }
                             );
                             skippedRecords++;
+                            skippedDetails.Add(($"Id={record.Id}", $"event_id {record.EventId} not found in event_master (FK constraint violation)"));
                             continue;
                         }
 
@@ -160,6 +162,7 @@ namespace DataMigration.Services
                                 }
                             );
                             skippedRecords++;
+                            skippedDetails.Add(($"Id={record.Id}", $"PRtransId {record.PRtransId} not found in event_items.erp_pr_lines_id mapping (FK constraint violation)"));
                             continue;
                         }
 
@@ -293,10 +296,12 @@ namespace DataMigration.Services
                             }
                         );
                         skippedRecords++;
+                        skippedDetails.Add(($"Id={record.Id}", ex.Message));
                     }
                 }
 
                 _migrationLogger.LogInfo($"Migration completed. Migrated: {migratedRecords}, Skipped: {skippedRecords}");
+                MigrationStatsExporter.ExportToExcel("auction_min_max_target_price_migration_stats.xlsx", processedCount, migratedRecords, skippedRecords, _logger, skippedDetails);
             }
             catch (Exception ex)
             {

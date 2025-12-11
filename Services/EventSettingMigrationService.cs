@@ -68,6 +68,8 @@ public class EventSettingMigrationService
     public async Task<int> MigrateAsync()
     {
         int migratedCount = 0;
+        int skippedCount = 0;
+        var skippedDetails = new List<(string RecordId, string Reason)>();
         _migrationLogger = new MigrationLogger(_logger, "event_setting");
         _migrationLogger.LogInfo("Starting migration");
         using var sqlConnection = new SqlConnection(_configuration.GetConnectionString("SqlServer"));
@@ -98,6 +100,8 @@ public class EventSettingMigrationService
             if (eventId == null || eventId == DBNull.Value)
             {
                 _migrationLogger.LogSkipped("EVENTID is NULL", null, new Dictionary<string, object> { { "EVENTID", eventId } });
+                skippedCount++;
+                skippedDetails.Add((reader["EVENTSCHEDULARID"]?.ToString() ?? "NULL", "EVENTID is NULL"));
                 continue;
             }
             var fields = new string[]
@@ -148,7 +152,16 @@ public class EventSettingMigrationService
             _migrationLogger.LogInserted($"EVENTID={eventId}");
         }
         writer.Close();
-        _migrationLogger.LogInfo($"Migrated {migratedCount} event_setting records.");
+        _migrationLogger.LogInfo($"Migrated {migratedCount} event_setting records. Skipped {skippedCount} records.");
+        // Export migration stats and skipped records to Excel
+        MigrationStatsExporter.ExportToExcel(
+            "EventSettingMigrationStats.xlsx",
+            migratedCount + skippedCount,
+            migratedCount,
+            skippedCount,
+            _logger,
+            skippedDetails
+        );
         return migratedCount;
     }
 

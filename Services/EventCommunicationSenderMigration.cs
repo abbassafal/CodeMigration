@@ -316,6 +316,23 @@ namespace DataMigration.Services
                 }
 
                 _logger.LogInformation($"Migration completed. Total migrated: {migratedRecords}, Total skipped: {skippedRecords}");
+
+                // Export migration stats to Excel
+                if (_migrationLogger != null)
+                {
+                    var skippedLogEntries = _migrationLogger.GetSkippedRecords();
+                    var skippedRecordsList = skippedLogEntries.Select(e => (e.RecordIdentifier, e.Message)).ToList();
+                    var excelPath = Path.Combine("migration_outputs", $"EventCommunicationSenderMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+                    MigrationStatsExporter.ExportToExcel(
+                        excelPath,
+                        migratedRecords + skippedRecords,
+                        migratedRecords,
+                        skippedRecords,
+                        _logger,
+                        skippedRecordsList
+                    );
+                    _migrationLogger.LogInfo($"Migration stats exported to {excelPath}");
+                }
             }
             catch (Exception ex)
             {

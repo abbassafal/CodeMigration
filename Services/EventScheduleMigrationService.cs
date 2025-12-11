@@ -56,6 +56,7 @@ public class EventScheduleMigrationService
     {
         int migratedCount = 0;
         int skippedCount = 0;
+        var skippedEventDetails = new List<(string RecordId, string Reason)>();
         var skippedEventIds = new List<int>();
         _migrationLogger = new MigrationLogger(_logger, "event_schedule");
         _migrationLogger.LogInfo("Starting migration");
@@ -108,6 +109,7 @@ public class EventScheduleMigrationService
             {
                 skippedCount++;
                 skippedEventIds.Add(eventId);
+                skippedEventDetails.Add((reader["EVENTSCHEDULARID"]?.ToString() ?? "NULL", $"event_id {eventId} not found in event_master"));
                 _migrationLogger.LogSkipped($"event_id {eventId} not found in event_master", reader["EVENTSCHEDULARID"]?.ToString());
                 continue;
             }
@@ -139,6 +141,15 @@ public class EventScheduleMigrationService
             _migrationLogger.LogInfo($"Migration completed with {skippedCount} skipped records (missing event_id in event_master).", null, new Dictionary<string, object>{{"SkippedEventIds", string.Join(", ", skippedEventIds.Distinct().OrderBy(x => x))}});
         }
         _migrationLogger.LogInfo($"Migrated {migratedCount} event_schedule records. Skipped {skippedCount} records.");
+        // Export migration stats and skipped records to Excel
+        MigrationStatsExporter.ExportToExcel(
+            "EventScheduleMigrationStats.xlsx",
+            migratedCount + skippedCount,
+            migratedCount,
+            skippedCount,
+            _logger,
+            skippedEventDetails
+        );
         return migratedCount;
     }
 

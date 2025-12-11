@@ -34,8 +34,8 @@ namespace DataMigration.Services
 
         public async Task<int> MigrateAsync()
         {
-        _migrationLogger = new MigrationLogger(_logger, "nfa_attachments");
-        _migrationLogger.LogInfo("Starting migration");
+            _migrationLogger = new MigrationLogger(_logger, "nfa_attachments");
+            _migrationLogger.LogInfo("Starting migration");
 
             var sqlConnectionString = _configuration.GetConnectionString("SqlServer");
             var pgConnectionString = _configuration.GetConnectionString("PostgreSql");
@@ -44,9 +44,11 @@ namespace DataMigration.Services
             {
                 throw new InvalidOperationException("Database connection strings are not configured properly.");
             }
+            var sourceData = new List<SourceRow>();
 
             var migratedRecords = 0;
-            var skippedRecords = 0;
+            var skippedRecordsCount = 0;
+            var skippedRecords = new List<(string RecordId, string Reason)>();
 
             try
             {
@@ -82,7 +84,6 @@ namespace DataMigration.Services
                 _logger.LogInformation($"Built nfa_header_id lookup with {validNfaHeaderIds.Count} entries");
 
                 // Fetch data from TBL_QCSPOMailAttachmentFile
-                var sourceData = new List<SourceRow>();
                 
                 using (var cmd = new SqlCommand(@"
                     SELECT 
@@ -149,7 +150,8 @@ namespace DataMigration.Services
                         if (!record.NfaHeaderId.HasValue)
                         {
                             _logger.LogWarning($"Skipping record Id={record.Id} from {record.SourceTable}: AWARDEVENTMAINID is null");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.Id.ToString(), "AWARDEVENTMAINID is null"));
                             continue;
                         }
 
@@ -157,7 +159,8 @@ namespace DataMigration.Services
                         if (!validNfaHeaderIds.Contains(record.NfaHeaderId.Value))
                         {
                             _logger.LogWarning($"Skipping record Id={record.Id} from {record.SourceTable}: nfa_header_id={record.NfaHeaderId} not found in nfa_header");
-                            skippedRecords++;
+                            skippedRecordsCount++;
+                            skippedRecords.Add((record.Id.ToString(), $"nfa_header_id={record.NfaHeaderId} not found in nfa_header"));
                             continue;
                         }
 
@@ -183,7 +186,8 @@ namespace DataMigration.Services
                     catch (Exception ex)
                     {
                         _logger.LogError($"Error processing record Id={record.Id} from {record.SourceTable}: {ex.Message}");
-                        skippedRecords++;
+                        skippedRecordsCount++;
+                        skippedRecords.Add((record.Id.ToString(), $"Error: {ex.Message}"));
                     }
                 }
 
@@ -192,13 +196,23 @@ namespace DataMigration.Services
                     await ExecuteInsertBatch(pgConnection, insertBatch);
                 }
 
-                _logger.LogInformation($"Migration completed. Migrated: {migratedRecords}, Skipped: {skippedRecords}");
+                _logger.LogInformation($"Migration completed. Migrated: {migratedRecords}, Skipped: {skippedRecordsCount}");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Migration failed");
                 throw;
             }
+
+            // Export migration stats and skipped records to Excel
+            MigrationStatsExporter.ExportToExcel(
+                "NfaAttachmentsMigration_Stats.xlsx",
+                sourceData.Count,
+                migratedRecords,
+                skippedRecordsCount,
+                _logger,
+                skippedRecords
+            );
 
             return migratedRecords;
         }
