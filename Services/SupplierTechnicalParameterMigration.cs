@@ -10,12 +10,30 @@ using DataMigration.Services;
 
 public class SupplierTechnicalParameterMigration : MigrationService
 {
-    private const int BATCH_SIZE = 1000;
+    private const int BATCH_SIZE = 5000; // Increased for COPY operations
     private readonly ILogger<SupplierTechnicalParameterMigration> _logger;
     private MigrationLogger? _migrationLogger;
     
     // Track skipped records for detailed reporting
     private List<(string RecordId, string Reason)> _skippedRecords = new List<(string, string)>();
+    
+    // Strongly-typed record class for batch processing with COPY
+    private class SupplierTechnicalParameterRecord
+    {
+        public long SupplierTechnicalParameterId { get; set; }
+        public long UserTechnicalParameterId { get; set; }
+        public string? SupplierTechnicalParameterResponse { get; set; }
+        public int SupplierId { get; set; }
+        public int? EventItemId { get; set; }
+        public int? EventId { get; set; }
+        public int? CreatedBy { get; set; }
+        public DateTime? CreatedDate { get; set; }
+        public int? ModifiedBy { get; set; }
+        public DateTime? ModifiedDate { get; set; }
+        public bool IsDeleted { get; set; }
+        public int? DeletedBy { get; set; }
+        public DateTime? DeletedDate { get; set; }
+    }
 
     protected override string SelectQuery => @"
         SELECT
@@ -29,47 +47,7 @@ public class SupplierTechnicalParameterMigration : MigrationService
         INNER JOIN TBL_PB_BUYER ON TBL_PB_BUYER.PBID = TBL_VendorTechItemTerm.PBID
         ORDER BY TBL_VendorTechItemTerm.VendorTechItemTermId";
 
-    protected override string InsertQuery => @"
-        INSERT INTO supplier_technical_parameter (
-            supplier_technical_parameter_id,
-            user_technical_parameter_id,
-            supplier_technical_parameter_response,
-            supplier_id,
-            event_item_id,
-            event_id,
-            created_by,
-            created_date,
-            modified_by,
-            modified_date,
-            is_deleted,
-            deleted_by,
-            deleted_date
-        ) VALUES (
-            @supplier_technical_parameter_id,
-            @user_technical_parameter_id,
-            @supplier_technical_parameter_response,
-            @supplier_id,
-            @event_item_id,
-            @event_id,
-            @created_by,
-            @created_date,
-            @modified_by,
-            @modified_date,
-            @is_deleted,
-            @deleted_by,
-            @deleted_date
-        )
-        ON CONFLICT (supplier_technical_parameter_id) DO UPDATE SET
-            user_technical_parameter_id = EXCLUDED.user_technical_parameter_id,
-            supplier_technical_parameter_response = EXCLUDED.supplier_technical_parameter_response,
-            supplier_id = EXCLUDED.supplier_id,
-            event_item_id = EXCLUDED.event_item_id,
-            event_id = EXCLUDED.event_id,
-            modified_by = EXCLUDED.modified_by,
-            modified_date = EXCLUDED.modified_date,
-            is_deleted = EXCLUDED.is_deleted,
-            deleted_by = EXCLUDED.deleted_by,
-            deleted_date = EXCLUDED.deleted_date";
+    protected override string InsertQuery => ""; // Not used with COPY
 
     public SupplierTechnicalParameterMigration(IConfiguration configuration, ILogger<SupplierTechnicalParameterMigration> logger) : base(configuration)
     {
@@ -126,144 +104,129 @@ public class SupplierTechnicalParameterMigration : MigrationService
     protected override async Task<int> ExecuteMigrationAsync(SqlConnection sqlConn, NpgsqlConnection pgConn, NpgsqlTransaction? transaction = null)
     {
         _migrationLogger = new MigrationLogger(_logger, "supplier_technical_parameter");
-        _migrationLogger.LogInfo("Starting migration");
+        _migrationLogger.LogInfo("Starting optimized migration with COPY");
 
-        _logger.LogInformation("Starting Supplier Technical Parameter migration...");
-
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         int totalRecords = 0;
         int migratedRecords = 0;
         int skippedRecords = 0;
 
         try
         {
-            // Load valid user_technical_parameter IDs
+            // Load validation data
             var validUserTechParamIds = await LoadValidUserTechnicalParameterIdsAsync(pgConn);
-            _logger.LogInformation($"Loaded {validUserTechParamIds.Count} valid user_technical_parameter IDs");
-
-            // Load valid supplier IDs
             var validSupplierIds = await LoadValidSupplierIdsAsync(pgConn);
-            _logger.LogInformation($"Loaded {validSupplierIds.Count} valid supplier IDs");
+            _logger.LogInformation($"Loaded validation data: {validUserTechParamIds.Count} user_technical_parameters, {validSupplierIds.Count} suppliers");
 
             using var sqlCommand = new SqlCommand(SelectQuery, sqlConn);
             sqlCommand.CommandTimeout = 300;
-
             using var reader = await sqlCommand.ExecuteReaderAsync();
 
-            var batch = new List<Dictionary<string, object>>();
+            var batch = new List<SupplierTechnicalParameterRecord>();
             var processedIds = new HashSet<long>();
 
             while (await reader.ReadAsync())
             {
                 totalRecords++;
 
-                var vendorTechItemTermId = reader["VendorTechItemTermId"];
-                var techItemTermId = reader["User_technical_Parameter_id"];
-                var value = reader["Supplier_technical_Parameter_Response"];
-                var vendorId = reader["Supplier_id"];
-                var pbId = reader["event_Item_Id"];
-                var eventId = reader["EVENTID"];
+                // Fast field access by ordinal
+                var vendorTechItemTermId = reader.IsDBNull(0) ? (long?)null : reader.GetInt64(0);
+                var techItemTermId = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1);
+                var value = reader.IsDBNull(2) ? null : reader.GetString(2);
+                var vendorId = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
+                var pbId = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4);
+                var eventId = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
 
-                // Skip if VendorTechItemTermId is NULL
-                if (vendorTechItemTermId == DBNull.Value)
+                // Skip if primary key is NULL
+                if (!vendorTechItemTermId.HasValue)
                 {
                     skippedRecords++;
-                    _logger.LogWarning("Skipping record - VendorTechItemTermId is NULL");
-                    _skippedRecords.Add((vendorTechItemTermId.ToString(), "VendorTechItemTermId is NULL"));
+                    _skippedRecords.Add(("NULL", "VendorTechItemTermId is NULL"));
                     continue;
                 }
 
-                long vendorTechItemTermIdValue = Convert.ToInt64(vendorTechItemTermId);
+                long id = vendorTechItemTermId.Value;
 
                 // Skip duplicates
-                if (processedIds.Contains(vendorTechItemTermIdValue))
+                if (processedIds.Contains(id))
                 {
                     skippedRecords++;
-                    _skippedRecords.Add((vendorTechItemTermId.ToString(), "Duplicate record"));
+                    _skippedRecords.Add((id.ToString(), "Duplicate record"));
                     continue;
                 }
 
-                // Skip if user_technical_parameter_id is NULL (NOT NULL constraint)
-                if (techItemTermId == DBNull.Value)
+                // Skip if user_technical_parameter_id is NULL
+                if (!techItemTermId.HasValue)
                 {
                     skippedRecords++;
-                    _logger.LogWarning($"Skipping VendorTechItemTermId {vendorTechItemTermIdValue} - user_technical_parameter_id is NULL");
-                    _skippedRecords.Add((vendorTechItemTermId.ToString(), "user_technical_parameter_id is NULL"));
+                    _skippedRecords.Add((id.ToString(), "user_technical_parameter_id is NULL"));
                     continue;
                 }
-
-                long techItemTermIdValue = Convert.ToInt64(techItemTermId);
 
                 // Validate user_technical_parameter_id
-                if (!validUserTechParamIds.Contains(techItemTermIdValue))
+                if (!validUserTechParamIds.Contains(techItemTermId.Value))
                 {
                     skippedRecords++;
-                    _logger.LogWarning($"Skipping VendorTechItemTermId {vendorTechItemTermIdValue} - Invalid user_technical_parameter_id: {techItemTermIdValue}");
-                    _skippedRecords.Add((vendorTechItemTermId.ToString(), $"Invalid user_technical_parameter_id: {techItemTermIdValue}"));
+                    _skippedRecords.Add((id.ToString(), $"Invalid user_technical_parameter_id: {techItemTermId.Value}"));
                     continue;
                 }
 
-                // Skip if supplier_id is NULL (NOT NULL constraint)
-                if (vendorId == DBNull.Value)
+                // Skip if supplier_id is NULL
+                if (!vendorId.HasValue)
                 {
                     skippedRecords++;
-                    _logger.LogWarning($"Skipping VendorTechItemTermId {vendorTechItemTermIdValue} - supplier_id is NULL");
-                    _skippedRecords.Add((vendorTechItemTermId.ToString(), "supplier_id is NULL"));
+                    _skippedRecords.Add((id.ToString(), "supplier_id is NULL"));
                     continue;
                 }
-
-                int vendorIdValue = Convert.ToInt32(vendorId);
 
                 // Validate supplier_id
-                if (!validSupplierIds.Contains(vendorIdValue))
+                if (!validSupplierIds.Contains(vendorId.Value))
                 {
                     skippedRecords++;
-                    _logger.LogWarning($"Skipping VendorTechItemTermId {vendorTechItemTermIdValue} - Invalid supplier_id: {vendorIdValue}");
-                    _skippedRecords.Add((vendorTechItemTermId.ToString(), $"Invalid supplier_id: {vendorIdValue}"));
+                    _skippedRecords.Add((id.ToString(), $"Invalid supplier_id: {vendorId.Value}"));
                     continue;
                 }
 
-                // Get event_item_id and event_id directly from query result
-                int? eventItemId = pbId != DBNull.Value ? Convert.ToInt32(pbId) : (int?)null;
-                int? eventIdValue = eventId != DBNull.Value ? Convert.ToInt32(eventId) : (int?)null;
-
-                var record = new Dictionary<string, object>
+                var record = new SupplierTechnicalParameterRecord
                 {
-                    ["supplier_technical_parameter_id"] = vendorTechItemTermIdValue,
-                    ["user_technical_parameter_id"] = techItemTermIdValue,
-                    ["supplier_technical_parameter_response"] = value ?? DBNull.Value,
-                    ["supplier_id"] = vendorIdValue,
-                    ["event_item_id"] = eventItemId.HasValue ? (object)eventItemId.Value : DBNull.Value,
-                    ["event_id"] = eventIdValue.HasValue ? (object)eventIdValue.Value : DBNull.Value,
-                    ["created_by"] = DBNull.Value,
-                    ["created_date"] = DBNull.Value,
-                    ["modified_by"] = DBNull.Value,
-                    ["modified_date"] = DBNull.Value,
-                    ["is_deleted"] = false,
-                    ["deleted_by"] = DBNull.Value,
-                    ["deleted_date"] = DBNull.Value
+                    SupplierTechnicalParameterId = id,
+                    UserTechnicalParameterId = techItemTermId.Value,
+                    SupplierTechnicalParameterResponse = value,
+                    SupplierId = vendorId.Value,
+                    EventItemId = pbId,
+                    EventId = eventId
                 };
 
                 batch.Add(record);
-                processedIds.Add(vendorTechItemTermIdValue);
+                processedIds.Add(id);
 
                 if (batch.Count >= BATCH_SIZE)
                 {
-                    int batchMigrated = await InsertBatchWithTransactionAsync(batch, pgConn);
+                    int batchMigrated = await InsertBatchWithCopyAsync(batch, pgConn);
                     migratedRecords += batchMigrated;
                     batch.Clear();
+                    
+                    if (totalRecords % 10000 == 0)
+                    {
+                        var elapsed = stopwatch.Elapsed;
+                        var rate = totalRecords / elapsed.TotalSeconds;
+                        _logger.LogInformation($"Progress: {totalRecords:N0} processed, {migratedRecords:N0} inserted, {rate:F1} records/sec");
+                    }
                 }
             }
 
             // Insert remaining records
             if (batch.Count > 0)
             {
-                int batchMigrated = await InsertBatchWithTransactionAsync(batch, pgConn);
+                int batchMigrated = await InsertBatchWithCopyAsync(batch, pgConn);
                 migratedRecords += batchMigrated;
             }
 
-            _logger.LogInformation($"Supplier Technical Parameter migration completed. Total: {totalRecords}, Migrated: {migratedRecords}, Skipped: {skippedRecords}");
+            stopwatch.Stop();
+            var totalRate = migratedRecords / stopwatch.Elapsed.TotalSeconds;
+            _logger.LogInformation($"Supplier Technical Parameter migration completed in {stopwatch.Elapsed:mm\\:ss}. Total: {totalRecords:N0}, Migrated: {migratedRecords:N0}, Skipped: {skippedRecords:N0}, Rate: {totalRate:F1} records/sec");
 
-            // Export migration statistics with skipped record details
+            // Export migration statistics
             MigrationStatsExporter.ExportToExcel(
                 "SupplierTechnicalParameter_migration_stats.xlsx",
                 totalRecords,
@@ -334,33 +297,128 @@ public class SupplierTechnicalParameterMigration : MigrationService
 
 
 
-    private async Task<int> InsertBatchWithTransactionAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn)
+    private async Task<int> InsertBatchWithCopyAsync(List<SupplierTechnicalParameterRecord> batch, NpgsqlConnection pgConn)
     {
+        if (batch.Count == 0) return 0;
+
         int insertedCount = 0;
 
-        using var transaction = await pgConn.BeginTransactionAsync();
         try
         {
-            foreach (var record in batch)
-            {
-                using var cmd = new NpgsqlCommand(InsertQuery, pgConn, transaction);
+            // Use PostgreSQL COPY for ultra-fast bulk insert
+            var copyCommand = @"COPY supplier_technical_parameter (
+                supplier_technical_parameter_id,
+                user_technical_parameter_id,
+                supplier_technical_parameter_response,
+                supplier_id,
+                event_item_id,
+                event_id,
+                created_by,
+                created_date,
+                modified_by,
+                modified_date,
+                is_deleted,
+                deleted_by,
+                deleted_date
+            ) FROM STDIN (FORMAT BINARY)";
 
-                foreach (var kvp in record)
+            using (var writer = await pgConn.BeginBinaryImportAsync(copyCommand))
+            {
+                foreach (var record in batch)
                 {
-                    cmd.Parameters.AddWithValue($"@{kvp.Key}", kvp.Value ?? DBNull.Value);
+                    await writer.StartRowAsync();
+                    await writer.WriteAsync(record.SupplierTechnicalParameterId, NpgsqlTypes.NpgsqlDbType.Bigint);
+                    await writer.WriteAsync(record.UserTechnicalParameterId, NpgsqlTypes.NpgsqlDbType.Bigint);
+                    await writer.WriteAsync(record.SupplierTechnicalParameterResponse, NpgsqlTypes.NpgsqlDbType.Text);
+                    await writer.WriteAsync(record.SupplierId, NpgsqlTypes.NpgsqlDbType.Integer);
+                    await writer.WriteAsync(record.EventItemId, NpgsqlTypes.NpgsqlDbType.Integer);
+                    await writer.WriteAsync(record.EventId, NpgsqlTypes.NpgsqlDbType.Integer);
+                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer); // created_by
+                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Timestamp); // created_date
+                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer); // modified_by
+                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Timestamp); // modified_date
+                    await writer.WriteAsync(false, NpgsqlTypes.NpgsqlDbType.Boolean); // is_deleted
+                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer); // deleted_by
+                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Timestamp); // deleted_date
+                    
+                    insertedCount++;
                 }
+
+                await writer.CompleteAsync();
+            }
+
+            _logger.LogDebug($"Inserted {insertedCount} records using COPY");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records with COPY");
+            // Fall back to individual inserts on error
+            insertedCount = await InsertBatchWithFallbackAsync(batch, pgConn);
+        }
+
+        return insertedCount;
+    }
+
+    private async Task<int> InsertBatchWithFallbackAsync(List<SupplierTechnicalParameterRecord> batch, NpgsqlConnection pgConn)
+    {
+        int insertedCount = 0;
+        var insertQuery = @"INSERT INTO supplier_technical_parameter (
+            supplier_technical_parameter_id,
+            user_technical_parameter_id,
+            supplier_technical_parameter_response,
+            supplier_id,
+            event_item_id,
+            event_id,
+            created_by,
+            created_date,
+            modified_by,
+            modified_date,
+            is_deleted,
+            deleted_by,
+            deleted_date
+        ) VALUES (
+            @supplier_technical_parameter_id,
+            @user_technical_parameter_id,
+            @supplier_technical_parameter_response,
+            @supplier_id,
+            @event_item_id,
+            @event_id,
+            @created_by,
+            @created_date,
+            @modified_by,
+            @modified_date,
+            @is_deleted,
+            @deleted_by,
+            @deleted_date
+        ) ON CONFLICT (supplier_technical_parameter_id) DO NOTHING";
+
+        foreach (var record in batch)
+        {
+            try
+            {
+                using var cmd = new NpgsqlCommand(insertQuery, pgConn);
+                cmd.Parameters.AddWithValue("@supplier_technical_parameter_id", record.SupplierTechnicalParameterId);
+                cmd.Parameters.AddWithValue("@user_technical_parameter_id", record.UserTechnicalParameterId);
+                cmd.Parameters.AddWithValue("@supplier_technical_parameter_response", (object?)record.SupplierTechnicalParameterResponse ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@supplier_id", record.SupplierId);
+                cmd.Parameters.AddWithValue("@event_item_id", (object?)record.EventItemId ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@event_id", (object?)record.EventId ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@created_by", DBNull.Value);
+                cmd.Parameters.AddWithValue("@created_date", DBNull.Value);
+                cmd.Parameters.AddWithValue("@modified_by", DBNull.Value);
+                cmd.Parameters.AddWithValue("@modified_date", DBNull.Value);
+                cmd.Parameters.AddWithValue("@is_deleted", false);
+                cmd.Parameters.AddWithValue("@deleted_by", DBNull.Value);
+                cmd.Parameters.AddWithValue("@deleted_date", DBNull.Value);
 
                 await cmd.ExecuteNonQueryAsync();
                 insertedCount++;
             }
-
-            await transaction.CommitAsync();
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync();
-            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records. Batch rolled back.");
-            // Don't throw - continue with next batch
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"Failed to insert record with ID {record.SupplierTechnicalParameterId}");
+                _skippedRecords.Add((record.SupplierTechnicalParameterId.ToString(), $"Insert failed: {ex.Message}"));
+            }
         }
 
         return insertedCount;
