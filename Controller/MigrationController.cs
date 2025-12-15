@@ -311,6 +311,11 @@ public class MigrationController : Controller
         return View();
     }
 
+    [HttpGet("BinaryAttachmentMigration")]
+    public IActionResult BinaryAttachmentMigration()
+    {
+        return View();
+    }
 
     [HttpGet("GetTables")]
     public IActionResult GetTables()
@@ -1765,6 +1770,7 @@ public class MigrationController : Controller
     }
 
     [HttpGet("material/progress-dashboard")]
+
     public IActionResult MaterialProgressDashboard()
     {
         return View("OptimizedProgress");

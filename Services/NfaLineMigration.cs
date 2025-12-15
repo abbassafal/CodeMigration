@@ -10,7 +10,7 @@ using DataMigration.Services;
 
 public class NfaLineMigration : MigrationService
 {
-    private const int BATCH_SIZE = 1000;
+    private const int BATCH_SIZE = 200;
     private readonly ILogger<NfaLineMigration> _logger;
     private MigrationLogger? _migrationLogger;
 
@@ -563,43 +563,34 @@ public class NfaLineMigration : MigrationService
     private async Task<int> InsertBatchWithTransactionAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn, NpgsqlTransaction? parentTransaction = null)
     {
         int insertedCount = 0;
-
-        // Use parent transaction if provided, otherwise create a new one
         NpgsqlTransaction? transaction = parentTransaction;
         bool ownTransaction = false;
-        
         if (transaction == null)
         {
             transaction = await pgConn.BeginTransactionAsync();
             ownTransaction = true;
         }
-
         try
         {
             foreach (var record in batch)
             {
                 using var cmd = new NpgsqlCommand(InsertQuery, pgConn, transaction);
-
+                cmd.CommandTimeout = 300; // Set 5 minute timeout for each insert
                 foreach (var kvp in record)
                 {
                     cmd.Parameters.AddWithValue($"@{kvp.Key}", kvp.Value);
                 }
-
                 await cmd.ExecuteNonQueryAsync();
                 insertedCount++;
             }
-
-            // Only commit if we created our own transaction
             if (ownTransaction)
             {
                 await transaction.CommitAsync();
             }
-
             return insertedCount;
         }
         catch (Exception ex)
         {
-            // Only rollback if we created our own transaction
             if (ownTransaction && transaction != null)
             {
                 await transaction.RollbackAsync();
@@ -609,7 +600,6 @@ public class NfaLineMigration : MigrationService
         }
         finally
         {
-            // Only dispose if we created our own transaction
             if (ownTransaction && transaction != null)
             {
                 await transaction.DisposeAsync();

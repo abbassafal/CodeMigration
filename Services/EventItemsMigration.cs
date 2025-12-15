@@ -212,7 +212,7 @@ ON CONFLICT (event_item_id) DO UPDATE SET
             // Validate required foreign keys
             if (eventId == DBNull.Value)
             {
-                _logger.LogWarning($"Skipping PBID {pbId}: EVENTID is NULL.");
+                _migrationLogger?.LogSkipped("EVENTID is NULL", $"PBID={pbId}");
                 skippedCount++;
                 continue;
             }
@@ -221,14 +221,14 @@ ON CONFLICT (event_item_id) DO UPDATE SET
             int eventIdValue = Convert.ToInt32(eventId);
             if (!validEventIds.Contains(eventIdValue))
             {
-                _logger.LogWarning($"Skipping PBID {pbId}: EVENTID {eventIdValue} not found in event_master.");
+                _migrationLogger?.LogSkipped($"EVENTID {eventIdValue} not found in event_master", $"PBID={pbId}");
                 skippedCount++;
                 continue;
             }
 
             if (prTransId == DBNull.Value)
             {
-                _logger.LogWarning($"Skipping PBID {pbId}: PRTRANSID is NULL.");
+                _migrationLogger?.LogSkipped("PRTRANSID is NULL", $"PBID={pbId}");
                 skippedCount++;
                 continue;
             }
@@ -246,7 +246,7 @@ ON CONFLICT (event_item_id) DO UPDATE SET
             // Skip if UOM ID is not found (required field)
             if (!uomId.HasValue)
             {
-                _logger.LogWarning($"Skipping PBID {pbId}: UOM ID not found for UOM Code '{uomCode}'.");
+                _migrationLogger?.LogSkipped($"UOM ID not found for UOM Code '{uomCode}'", $"PBID={pbId}");
                 skippedCount++;
                 continue;
             }
@@ -257,7 +257,7 @@ ON CONFLICT (event_item_id) DO UPDATE SET
             // Skip if ClientSAPId is NULL or 0 (required field)
             if (clientSapId == DBNull.Value || Convert.ToInt32(clientSapId) == 0)
             {
-                _logger.LogWarning($"Skipping PBID {pbId}: ClientSAPId is NULL or 0.");
+                _migrationLogger?.LogSkipped("ClientSAPId is NULL or 0", $"PBID={pbId}");
                 skippedCount++;
                 continue;
             }

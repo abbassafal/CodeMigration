@@ -14,18 +14,15 @@ public class SupplierTechnicalParameterMigration : MigrationService
     private readonly ILogger<SupplierTechnicalParameterMigration> _logger;
     private MigrationLogger? _migrationLogger;
     
-    // Track skipped records for detailed reporting
-    private List<(string RecordId, string Reason)> _skippedRecords = new List<(string, string)>();
-    
     // Strongly-typed record class for batch processing with COPY
     private class SupplierTechnicalParameterRecord
     {
-        public long SupplierTechnicalParameterId { get; set; }
-        public long UserTechnicalParameterId { get; set; }
+        public int SupplierTechnicalParameterId { get; set; }  // Changed from long to int
+        public int UserTechnicalParameterId { get; set; }      // Changed from long to int
         public string? SupplierTechnicalParameterResponse { get; set; }
         public int SupplierId { get; set; }
-        public int? EventItemId { get; set; }
-        public int? EventId { get; set; }
+        public int EventItemId { get; set; }  // Changed from nullable to NOT NULL (matches schema)
+        public int EventId { get; set; }      // Changed from nullable to NOT NULL (matches schema)
         public int? CreatedBy { get; set; }
         public DateTime? CreatedDate { get; set; }
         public int? ModifiedBy { get; set; }
@@ -80,19 +77,19 @@ public class SupplierTechnicalParameterMigration : MigrationService
     {
         return new List<object>
         {
-            new { source = "VendorTechItemTermId", logic = "VendorTechItemTermId -> supplier_technical_parameter_id (Primary key, autoincrement - SupplierTechnicalParameterId)", target = "supplier_technical_parameter_id" },
-            new { source = "TechItemTermId", logic = "TechItemTermId -> user_technical_parameter_id (Foreign key to user_technical_parameter - UserTechnicalParameterId)", target = "user_technical_parameter_id" },
-            new { source = "Value", logic = "Value -> supplier_technical_parameter_response (SupplierTechnicalParameterResponse)", target = "supplier_technical_parameter_response" },
-            new { source = "VendorId", logic = "VendorId -> supplier_id (Foreign key to supplier_master - SupplierId)", target = "supplier_id" },
-            new { source = "PBID", logic = "PBID -> event_item_id (Direct from TBL_VendorTechItemTerm.PBID)", target = "event_item_id" },
-            new { source = "EVENTID", logic = "EVENTID -> event_id (Direct from TBL_PB_BUYER via INNER JOIN on PBID)", target = "event_id" },
-            new { source = "-", logic = "created_by -> NULL (Fixed Default)", target = "created_by" },
-            new { source = "-", logic = "created_date -> NULL (Fixed Default)", target = "created_date" },
-            new { source = "-", logic = "modified_by -> NULL (Fixed Default)", target = "modified_by" },
-            new { source = "-", logic = "modified_date -> NULL (Fixed Default)", target = "modified_date" },
-            new { source = "-", logic = "is_deleted -> false (Fixed Default)", target = "is_deleted" },
-            new { source = "-", logic = "deleted_by -> NULL (Fixed Default)", target = "deleted_by" },
-            new { source = "-", logic = "deleted_date -> NULL (Fixed Default)", target = "deleted_date" }
+            new { source = "VendorTechItemTermId", target = "supplier_technical_parameter_id" },
+            new { source = "TechItemTermId", target = "user_technical_parameter_id" },
+            new { source = "Value", target = "supplier_technical_parameter_response" },
+            new { source = "VendorId", target = "supplier_id" },
+            new { source = "PBID", target = "event_item_id" },
+            new { source = "EVENTID", target = "event_id" },
+            new { source = "Fixed:NULL", target = "created_by" },
+            new { source = "Fixed:NULL", target = "created_date" },
+            new { source = "Fixed:NULL", target = "modified_by" },
+            new { source = "Fixed:NULL", target = "modified_date" },
+            new { source = "Fixed:false", target = "is_deleted" },
+            new { source = "Fixed:NULL", target = "deleted_by" },
+            new { source = "Fixed:NULL", target = "deleted_date" }
         };
     }
 
@@ -118,72 +115,114 @@ public class SupplierTechnicalParameterMigration : MigrationService
             var validSupplierIds = await LoadValidSupplierIdsAsync(pgConn);
             _logger.LogInformation($"Loaded validation data: {validUserTechParamIds.Count} user_technical_parameters, {validSupplierIds.Count} suppliers");
 
+            // Load all existing IDs from PostgreSQL to skip duplicates
+            var existingTargetIds = new HashSet<int>();
+            try
+            {
+                var idQuery = "SELECT supplier_technical_parameter_id FROM supplier_technical_parameter";
+                using var idCmd = new NpgsqlCommand(idQuery, pgConn);
+                using var idReader = await idCmd.ExecuteReaderAsync();
+                while (await idReader.ReadAsync())
+                {
+                    existingTargetIds.Add(idReader.GetInt32(0));
+                }
+                _logger.LogInformation($"Loaded {existingTargetIds.Count} existing supplier_technical_parameter_id values from target");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading existing supplier_technical_parameter_id values from target");
+            }
+
             using var sqlCommand = new SqlCommand(SelectQuery, sqlConn);
             sqlCommand.CommandTimeout = 300;
             using var reader = await sqlCommand.ExecuteReaderAsync();
 
             var batch = new List<SupplierTechnicalParameterRecord>();
-            var processedIds = new HashSet<long>();
+            var processedIds = new HashSet<int>();  // Changed from long to int
 
             while (await reader.ReadAsync())
             {
                 totalRecords++;
 
-                // Fast field access by ordinal
-                var vendorTechItemTermId = reader.IsDBNull(0) ? (long?)null : reader.GetInt64(0);
-                var techItemTermId = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1);
+                // Dynamic type checking for SQL Server (can be BIGINT or INT)
+                var vendorTechItemTermId = reader.IsDBNull(0) ? (int?)null : 
+                    reader.GetFieldType(0) == typeof(long) ? Convert.ToInt32(reader.GetInt64(0)) : reader.GetInt32(0);
+                var techItemTermId = reader.IsDBNull(1) ? (int?)null : 
+                    reader.GetFieldType(1) == typeof(long) ? Convert.ToInt32(reader.GetInt64(1)) : reader.GetInt32(1);
                 var value = reader.IsDBNull(2) ? null : reader.GetString(2);
-                var vendorId = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
-                var pbId = reader.IsDBNull(4) ? (int?)null : reader.GetInt32(4);
-                var eventId = reader.IsDBNull(5) ? (int?)null : reader.GetInt32(5);
+                var vendorId = reader.IsDBNull(3) ? (int?)null : 
+                    reader.GetFieldType(3) == typeof(long) ? Convert.ToInt32(reader.GetInt64(3)) : reader.GetInt32(3);
+                var pbId = reader.IsDBNull(4) ? (int?)null : 
+                    reader.GetFieldType(4) == typeof(long) ? Convert.ToInt32(reader.GetInt64(4)) : reader.GetInt32(4);
+                var eventId = reader.IsDBNull(5) ? (int?)null : 
+                    reader.GetFieldType(5) == typeof(long) ? Convert.ToInt32(reader.GetInt64(5)) : reader.GetInt32(5);
 
                 // Skip if primary key is NULL
                 if (!vendorTechItemTermId.HasValue)
                 {
+                    _migrationLogger.LogSkipped("VendorTechItemTermId is NULL", "NULL");
                     skippedRecords++;
-                    _skippedRecords.Add(("NULL", "VendorTechItemTermId is NULL"));
                     continue;
                 }
 
-                long id = vendorTechItemTermId.Value;
+                int id = vendorTechItemTermId.Value;  // Changed from long to int
 
-                // Skip duplicates
-                if (processedIds.Contains(id))
+                // Skip if this ID already exists in the target
+                if (existingTargetIds.Contains(id))
                 {
+                    _migrationLogger.LogSkipped("Duplicate in target: supplier_technical_parameter_id already exists", id.ToString());
                     skippedRecords++;
-                    _skippedRecords.Add((id.ToString(), "Duplicate record"));
                     continue;
                 }
 
                 // Skip if user_technical_parameter_id is NULL
                 if (!techItemTermId.HasValue)
                 {
+                    _migrationLogger.LogSkipped("user_technical_parameter_id is NULL", id.ToString());
                     skippedRecords++;
-                    _skippedRecords.Add((id.ToString(), "user_technical_parameter_id is NULL"));
                     continue;
                 }
 
                 // Validate user_technical_parameter_id
                 if (!validUserTechParamIds.Contains(techItemTermId.Value))
                 {
+                    _migrationLogger.LogSkipped($"Invalid user_technical_parameter_id: {techItemTermId.Value}", 
+                        id.ToString(), 
+                        new Dictionary<string, object> { { "user_technical_parameter_id", techItemTermId.Value } });
                     skippedRecords++;
-                    _skippedRecords.Add((id.ToString(), $"Invalid user_technical_parameter_id: {techItemTermId.Value}"));
                     continue;
                 }
 
                 // Skip if supplier_id is NULL
                 if (!vendorId.HasValue)
                 {
+                    _migrationLogger.LogSkipped("supplier_id is NULL", id.ToString());
                     skippedRecords++;
-                    _skippedRecords.Add((id.ToString(), "supplier_id is NULL"));
                     continue;
                 }
 
                 // Validate supplier_id
                 if (!validSupplierIds.Contains(vendorId.Value))
                 {
+                    _migrationLogger.LogSkipped($"Invalid supplier_id: {vendorId.Value}", 
+                        id.ToString(), 
+                        new Dictionary<string, object> { { "supplier_id", vendorId.Value } });
                     skippedRecords++;
-                    _skippedRecords.Add((id.ToString(), $"Invalid supplier_id: {vendorId.Value}"));
+                    continue;
+                }
+
+                // Skip if event_item_id or event_id is NULL (both are NOT NULL in PostgreSQL)
+                if (!pbId.HasValue)
+                {
+                    _migrationLogger.LogSkipped("event_item_id is NULL", id.ToString());
+                    skippedRecords++;
+                    continue;
+                }
+
+                if (!eventId.HasValue)
+                {
+                    _migrationLogger.LogSkipped("event_id is NULL", id.ToString());
+                    skippedRecords++;
                     continue;
                 }
 
@@ -193,8 +232,8 @@ public class SupplierTechnicalParameterMigration : MigrationService
                     UserTechnicalParameterId = techItemTermId.Value,
                     SupplierTechnicalParameterResponse = value,
                     SupplierId = vendorId.Value,
-                    EventItemId = pbId,
-                    EventId = eventId
+                    EventItemId = pbId.Value,    // Now non-nullable
+                    EventId = eventId.Value       // Now non-nullable
                 };
 
                 batch.Add(record);
@@ -226,15 +265,22 @@ public class SupplierTechnicalParameterMigration : MigrationService
             var totalRate = migratedRecords / stopwatch.Elapsed.TotalSeconds;
             _logger.LogInformation($"Supplier Technical Parameter migration completed in {stopwatch.Elapsed:mm\\:ss}. Total: {totalRecords:N0}, Migrated: {migratedRecords:N0}, Skipped: {skippedRecords:N0}, Rate: {totalRate:F1} records/sec");
 
-            // Export migration statistics
-            MigrationStatsExporter.ExportToExcel(
-                "SupplierTechnicalParameter_migration_stats.xlsx",
-                totalRecords,
-                migratedRecords,
-                skippedRecords,
-                _logger,
-                _skippedRecords
-            );
+            // Export migration statistics using MigrationLogger
+            if (_migrationLogger != null)
+            {
+                var skippedLogEntries = _migrationLogger.GetSkippedRecords();
+                var skippedRecordsList = skippedLogEntries.Select(e => (e.RecordIdentifier, e.Message)).ToList();
+                var excelPath = Path.Combine("migration_outputs", $"SupplierTechnicalParameter_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx");
+                MigrationStatsExporter.ExportToExcel(
+                    excelPath,
+                    totalRecords,
+                    migratedRecords,
+                    skippedRecords,
+                    _logger,
+                    skippedRecordsList
+                );
+                _migrationLogger.LogInfo($"Migration stats exported to {excelPath}");
+            }
 
             return migratedRecords;
         }
@@ -245,9 +291,9 @@ public class SupplierTechnicalParameterMigration : MigrationService
         }
     }
 
-    private async Task<HashSet<long>> LoadValidUserTechnicalParameterIdsAsync(NpgsqlConnection pgConn)
+    private async Task<HashSet<int>> LoadValidUserTechnicalParameterIdsAsync(NpgsqlConnection pgConn)
     {
-        var validIds = new HashSet<long>();
+        var validIds = new HashSet<int>();  // Changed from long to int
 
         try
         {
@@ -257,7 +303,7 @@ public class SupplierTechnicalParameterMigration : MigrationService
 
             while (await reader.ReadAsync())
             {
-                validIds.Add(reader.GetInt64(0));
+                validIds.Add(reader.GetInt32(0));  // Changed from GetInt64 to GetInt32
             }
 
             _logger.LogInformation($"Loaded {validIds.Count} valid user_technical_parameter IDs from user_technical_parameter");
@@ -305,6 +351,32 @@ public class SupplierTechnicalParameterMigration : MigrationService
 
         try
         {
+            // First, check the actual column types from PostgreSQL
+            var schemaQuery = @"SELECT column_name, data_type, udt_name 
+                               FROM information_schema.columns 
+                               WHERE table_name = 'supplier_technical_parameter' 
+                               ORDER BY ordinal_position";
+            
+            using (var schemaCmd = new NpgsqlCommand(schemaQuery, pgConn))
+            using (var schemaReader = await schemaCmd.ExecuteReaderAsync())
+            {
+                _logger.LogDebug("=== supplier_technical_parameter table schema ===");
+                while (await schemaReader.ReadAsync())
+                {
+                    var colName = schemaReader.GetString(0);
+                    var dataType = schemaReader.GetString(1);
+                    var udtName = schemaReader.GetString(2);
+                    _logger.LogDebug($"  {colName}: {dataType} ({udtName})");
+                }
+            }
+
+            // Log first record for debugging
+            if (batch.Count > 0)
+            {
+                var firstRecord = batch[0];
+                _logger.LogDebug($"First record: ID={firstRecord.SupplierTechnicalParameterId}, UserTechParamId={firstRecord.UserTechnicalParameterId}, SupplierId={firstRecord.SupplierId}");
+            }
+
             // Use PostgreSQL COPY for ultra-fast bulk insert
             var copyCommand = @"COPY supplier_technical_parameter (
                 supplier_technical_parameter_id,
@@ -326,36 +398,88 @@ public class SupplierTechnicalParameterMigration : MigrationService
             {
                 foreach (var record in batch)
                 {
-                    await writer.StartRowAsync();
-                    await writer.WriteAsync(record.SupplierTechnicalParameterId, NpgsqlTypes.NpgsqlDbType.Bigint);
-                    await writer.WriteAsync(record.UserTechnicalParameterId, NpgsqlTypes.NpgsqlDbType.Bigint);
-                    await writer.WriteAsync(record.SupplierTechnicalParameterResponse, NpgsqlTypes.NpgsqlDbType.Text);
-                    await writer.WriteAsync(record.SupplierId, NpgsqlTypes.NpgsqlDbType.Integer);
-                    await writer.WriteAsync(record.EventItemId, NpgsqlTypes.NpgsqlDbType.Integer);
-                    await writer.WriteAsync(record.EventId, NpgsqlTypes.NpgsqlDbType.Integer);
-                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer); // created_by
-                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Timestamp); // created_date
-                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer); // modified_by
-                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Timestamp); // modified_date
-                    await writer.WriteAsync(false, NpgsqlTypes.NpgsqlDbType.Boolean); // is_deleted
-                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer); // deleted_by
-                    await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Timestamp); // deleted_date
-                    
-                    insertedCount++;
+                    try
+                    {
+                        await writer.StartRowAsync();
+                        
+                        // supplier_technical_parameter_id (INTEGER, NOT NULL) - FIXED: Was using Bigint
+                        await writer.WriteAsync(record.SupplierTechnicalParameterId, NpgsqlTypes.NpgsqlDbType.Integer);
+                        
+                        // user_technical_parameter_id (INTEGER, NOT NULL) - FIXED: Was using Bigint
+                        await writer.WriteAsync(record.UserTechnicalParameterId, NpgsqlTypes.NpgsqlDbType.Integer);
+                        
+                        // supplier_technical_parameter_response (TEXT, nullable)
+                        if (record.SupplierTechnicalParameterResponse != null)
+                            await writer.WriteAsync(record.SupplierTechnicalParameterResponse, NpgsqlTypes.NpgsqlDbType.Text);
+                        else
+                            await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Text);
+                        
+                        // supplier_id (INTEGER, NOT NULL)
+                        await writer.WriteAsync(record.SupplierId, NpgsqlTypes.NpgsqlDbType.Integer);
+                        
+                        // event_item_id (INTEGER, NOT NULL) - FIXED: Was nullable
+                        await writer.WriteAsync(record.EventItemId, NpgsqlTypes.NpgsqlDbType.Integer);
+                        
+                        // event_id (INTEGER, NOT NULL) - FIXED: Was nullable
+                        await writer.WriteAsync(record.EventId, NpgsqlTypes.NpgsqlDbType.Integer);
+                        
+                        // created_by (INTEGER, nullable)
+                        if (record.CreatedBy.HasValue)
+                            await writer.WriteAsync(record.CreatedBy.Value, NpgsqlTypes.NpgsqlDbType.Integer);
+                        else
+                            await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer);
+                        
+                        // created_date (TIMESTAMP, nullable)
+                        if (record.CreatedDate.HasValue)
+                            await writer.WriteAsync(record.CreatedDate.Value, NpgsqlTypes.NpgsqlDbType.Timestamp);
+                        else
+                            await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Timestamp);
+                        
+                        // modified_by (INTEGER, nullable)
+                        if (record.ModifiedBy.HasValue)
+                            await writer.WriteAsync(record.ModifiedBy.Value, NpgsqlTypes.NpgsqlDbType.Integer);
+                        else
+                            await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer);
+                        
+                        // modified_date (TIMESTAMP, nullable)
+                        if (record.ModifiedDate.HasValue)
+                            await writer.WriteAsync(record.ModifiedDate.Value, NpgsqlTypes.NpgsqlDbType.Timestamp);
+                        else
+                            await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Timestamp);
+                        
+                        // is_deleted (BOOLEAN, NOT NULL)
+                        await writer.WriteAsync(record.IsDeleted, NpgsqlTypes.NpgsqlDbType.Boolean);
+                        
+                        // deleted_by (INTEGER, nullable)
+                        if (record.DeletedBy.HasValue)
+                            await writer.WriteAsync(record.DeletedBy.Value, NpgsqlTypes.NpgsqlDbType.Integer);
+                        else
+                            await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Integer);
+                        
+                        // deleted_date (TIMESTAMP, nullable)
+                        if (record.DeletedDate.HasValue)
+                            await writer.WriteAsync(record.DeletedDate.Value, NpgsqlTypes.NpgsqlDbType.Timestamp);
+                        else
+                            await writer.WriteAsync(DBNull.Value, NpgsqlTypes.NpgsqlDbType.Timestamp);
+                        
+                        insertedCount++;
+                    }
+                    catch (Exception recordEx)
+                    {
+                        _logger.LogError(recordEx, $"Error writing record ID {record.SupplierTechnicalParameterId} to COPY stream");
+                        throw;
+                    }
                 }
-
                 await writer.CompleteAsync();
             }
-
             _logger.LogDebug($"Inserted {insertedCount} records using COPY");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records with COPY");
+            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records with COPY. First ID: {(batch.Count > 0 ? batch[0].SupplierTechnicalParameterId : 0)}");
             // Fall back to individual inserts on error
             insertedCount = await InsertBatchWithFallbackAsync(batch, pgConn);
         }
-
         return insertedCount;
     }
 
@@ -401,8 +525,8 @@ public class SupplierTechnicalParameterMigration : MigrationService
                 cmd.Parameters.AddWithValue("@user_technical_parameter_id", record.UserTechnicalParameterId);
                 cmd.Parameters.AddWithValue("@supplier_technical_parameter_response", (object?)record.SupplierTechnicalParameterResponse ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@supplier_id", record.SupplierId);
-                cmd.Parameters.AddWithValue("@event_item_id", (object?)record.EventItemId ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@event_id", (object?)record.EventId ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@event_item_id", record.EventItemId);  // Now non-nullable
+                cmd.Parameters.AddWithValue("@event_id", record.EventId);            // Now non-nullable
                 cmd.Parameters.AddWithValue("@created_by", DBNull.Value);
                 cmd.Parameters.AddWithValue("@created_date", DBNull.Value);
                 cmd.Parameters.AddWithValue("@modified_by", DBNull.Value);
@@ -416,8 +540,9 @@ public class SupplierTechnicalParameterMigration : MigrationService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, $"Failed to insert record with ID {record.SupplierTechnicalParameterId}");
-                _skippedRecords.Add((record.SupplierTechnicalParameterId.ToString(), $"Insert failed: {ex.Message}"));
+                _migrationLogger?.LogSkipped($"Insert failed: {ex.Message}", 
+                    record.SupplierTechnicalParameterId.ToString(), 
+                    new Dictionary<string, object> { { "Exception", ex.GetType().Name } });
             }
         }
 

@@ -159,14 +159,16 @@ namespace DataMigration.Services
                         // Validate event_id (REQUIRED - NOT NULL)
                         if (!record.EventId.HasValue)
                         {
-                            _logger.LogWarning($"Skipping MailMsgMainId {record.MailMsgMainId}: event_id is null");
+                            _migrationLogger.LogSkipped("event_id is null", $"MailMsgMainId={record.MailMsgMainId}");
                             skippedRecords++;
                             continue;
                         }
 
                         if (!validEventIds.Contains(record.EventId.Value))
                         {
-                            _logger.LogWarning($"Skipping MailMsgMainId {record.MailMsgMainId}: event_id={record.EventId} not found in event_master");
+                            _migrationLogger.LogSkipped($"event_id={record.EventId} not found in event_master", 
+                                $"MailMsgMainId={record.MailMsgMainId}", 
+                                new Dictionary<string, object> { { "event_id", record.EventId.Value } });
                             skippedRecords++;
                             continue;
                         }
@@ -174,14 +176,16 @@ namespace DataMigration.Services
                         // Validate sender_userid (REQUIRED - NOT NULL)
                         if (!record.FromUserId.HasValue)
                         {
-                            _logger.LogWarning($"Skipping MailMsgMainId {record.MailMsgMainId}: FromUserId is null");
+                            _migrationLogger.LogSkipped("FromUserId is null", $"MailMsgMainId={record.MailMsgMainId}");
                             skippedRecords++;
                             continue;
                         }
 
                         if (!validUserIds.Contains(record.FromUserId.Value))
                         {
-                            _logger.LogWarning($"Skipping MailMsgMainId {record.MailMsgMainId}: FromUserId={record.FromUserId} not found in users");
+                            _migrationLogger.LogSkipped($"FromUserId={record.FromUserId} not found in users", 
+                                $"MailMsgMainId={record.MailMsgMainId}", 
+                                new Dictionary<string, object> { { "FromUserId", record.FromUserId.Value } });
                             skippedRecords++;
                             continue;
                         }
@@ -189,35 +193,35 @@ namespace DataMigration.Services
                         // Validate required text fields (NOT NULL constraints)
                         if (string.IsNullOrWhiteSpace(record.FromUserType))
                         {
-                            _logger.LogWarning($"Skipping MailMsgMainId {record.MailMsgMainId}: FromUserType is null/empty");
+                            _migrationLogger.LogSkipped("FromUserType is null/empty", $"MailMsgMainId={record.MailMsgMainId}");
                             skippedRecords++;
                             continue;
                         }
 
                         if (string.IsNullOrWhiteSpace(record.FromMailId))
                         {
-                            _logger.LogWarning($"Skipping MailMsgMainId {record.MailMsgMainId}: FromMailId is null/empty");
+                            _migrationLogger.LogSkipped("FromMailId is null/empty", $"MailMsgMainId={record.MailMsgMainId}");
                             skippedRecords++;
                             continue;
                         }
 
                         if (string.IsNullOrWhiteSpace(record.CommunicationType))
                         {
-                            _logger.LogWarning($"Skipping MailMsgMainId {record.MailMsgMainId}: CommunicationType is null/empty");
+                            _migrationLogger.LogSkipped("CommunicationType is null/empty", $"MailMsgMainId={record.MailMsgMainId}");
                             skippedRecords++;
                             continue;
                         }
 
                         if (string.IsNullOrWhiteSpace(record.Subject))
                         {
-                            _logger.LogWarning($"Skipping MailMsgMainId {record.MailMsgMainId}: Subject is null/empty");
+                            _migrationLogger.LogSkipped("Subject is null/empty", $"MailMsgMainId={record.MailMsgMainId}");
                             skippedRecords++;
                             continue;
                         }
 
                         if (string.IsNullOrWhiteSpace(record.BodyText))
                         {
-                            _logger.LogWarning($"Skipping MailMsgMainId {record.MailMsgMainId}: BodyText is null/empty");
+                            _migrationLogger.LogSkipped("BodyText is null/empty", $"MailMsgMainId={record.MailMsgMainId}");
                             skippedRecords++;
                             continue;
                         }
@@ -254,7 +258,9 @@ namespace DataMigration.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"Error processing MailMsgMainId {record.MailMsgMainId}: {ex.Message}");
+                        _migrationLogger.LogSkipped($"Error processing record: {ex.Message}", 
+                            $"MailMsgMainId={record.MailMsgMainId}", 
+                            new Dictionary<string, object> { { "Exception", ex.GetType().Name } });
                         skippedRecords++;
                     }
                 }
@@ -307,7 +313,9 @@ namespace DataMigration.Services
                         }
                         else
                         {
-                            _logger.LogWarning($"Cannot update replyid for ec_senderid {mailMsgMainId}: parent {parentId} not found in event_communication_sender");
+                            _migrationLogger.LogSkipped($"Cannot update replyid: parent {parentId} not found in event_communication_sender", 
+                                $"ec_senderid={mailMsgMainId}", 
+                                new Dictionary<string, object> { { "ParentId", parentId } });
                             skippedUpdateCount++;
                         }
                     }

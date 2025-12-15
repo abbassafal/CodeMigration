@@ -27,8 +27,9 @@ namespace DataMigration.Services
         private readonly ConcurrentQueue<BinaryMigrationJob> _jobQueue = new();
         private readonly ConcurrentDictionary<string, BinaryMigrationStatus> _jobStatuses = new();
 
-        private const int BINARY_COPY_BATCH = 20;
+        private const int BINARY_COPY_BATCH = 50; // Increased for better performance
         private const long MAX_BINARY_SIZE = 250 * 1024 * 1024; // 250 MB
+        private const int MAX_PARALLEL_BATCHES = 4; // Process 4 batches concurrently
 
         public BinaryAttachmentBackgroundService(
             IConfiguration configuration,
@@ -84,7 +85,13 @@ namespace DataMigration.Services
         {
             return _jobStatuses.TryGetValue(jobId, out var status) ? status : null;
         }
-
+        /// <summary>
+        /// Get the status of all jobs
+        /// </summary>
+        public IEnumerable<BinaryMigrationStatus> GetAllJobStatuses()
+        {
+            return _jobStatuses.Values;
+        }
         /// <summary>
         /// Background execution loop
         /// </summary>
@@ -203,13 +210,18 @@ namespace DataMigration.Services
 
             using var reader = await selectCmd.ExecuteReaderAsync(System.Data.CommandBehavior.SequentialAccess, cancellationToken);
 
-            var batch = new List<(long id, long size, Func<CancellationToken, Task<Stream>> streamFactory)>();
+            var allBatches = new List<List<(long id, byte[] data)>>();
+            var currentBatch = new List<(long id, byte[] data)>();
             int skippedLarge = 0;
             int skippedEmpty = 0;
             var skippedRecords = new List<(string RecordId, string Reason)>();
+            int readCount = 0;
 
+            // Phase 1: Read all data into batches first
+            _logger.LogInformation("Phase 1: Reading binary data from SQL Server...");
             while (await reader.ReadAsync(cancellationToken))
             {
+                readCount++;
                 var id = reader.IsDBNull(0) ? throw new InvalidOperationException("Null PRATTACHMENTID") : Convert.ToInt64(reader.GetValue(0));
                 long size = reader.IsDBNull(1) ? 0 : reader.GetBytes(1, 0, null, 0, 0);
 
@@ -228,46 +240,78 @@ namespace DataMigration.Services
                     continue;
                 }
 
-                batch.Add((id, size, async (ct) =>
-                {
-                    var singleCmd = new SqlCommand(
-                        "SELECT PRATTACHMENTDATA FROM TBL_PRATTACHMENT WHERE PRATTACHMENTID = @id",
-                        sqlConn);
-                    singleCmd.Parameters.AddWithValue("@id", id);
-                    singleCmd.CommandTimeout = 600;
-                    
-                    using var rdr = await singleCmd.ExecuteReaderAsync(
-                        System.Data.CommandBehavior.SequentialAccess | System.Data.CommandBehavior.SingleRow,
-                        ct);
-                    
-                    if (!await rdr.ReadAsync(ct))
-                        throw new InvalidOperationException("Row disappeared while streaming binary");
-                    
-                    var st = rdr.GetStream(0);
-                    var ms = new MemoryStream();
-                    await st.CopyToAsync(ms, 81920, ct);
-                    ms.Position = 0;
-                    return (Stream)ms;
-                }));
+                // Read binary data directly into byte array
+                var buffer = new byte[size];
+                reader.GetBytes(1, 0, buffer, 0, (int)size);
+                currentBatch.Add((id, buffer));
 
-                // Process batch when threshold reached
-                if (batch.Count >= BINARY_COPY_BATCH)
+                // Log progress every 100 files
+                if (readCount % 100 == 0)
                 {
-                    await ProcessBinaryBatchAsync(pgConn, batch, status, cancellationToken);
-                    batch.Clear();
-                    GC.Collect();
-                    GC.WaitForPendingFinalizers();
-                    GC.Collect();
+                    _logger.LogInformation($"Read {readCount:N0} / {status.TotalFiles:N0} files from SQL Server ({readCount * 100.0 / status.TotalFiles:F1}%)");
+                }
+
+                // Create new batch when threshold reached
+                if (currentBatch.Count >= BINARY_COPY_BATCH)
+                {
+                    allBatches.Add(currentBatch);
+                    currentBatch = new List<(long id, byte[] data)>();
                 }
             }
 
-            // Process remaining batch
-            if (batch.Count > 0)
+            // Add remaining batch
+            if (currentBatch.Count > 0)
             {
-                await ProcessBinaryBatchAsync(pgConn, batch, status, cancellationToken);
-                batch.Clear();
-                GC.Collect();
+                allBatches.Add(currentBatch);
             }
+
+            _logger.LogInformation($"Phase 1 complete: Read {readCount:N0} files into {allBatches.Count} batches");
+
+            // Phase 2: Process batches in parallel
+            _logger.LogInformation($"Phase 2: Processing {allBatches.Count} batches in parallel (max {MAX_PARALLEL_BATCHES} concurrent)...");
+            
+            using var semaphore = new SemaphoreSlim(MAX_PARALLEL_BATCHES);
+            var processingTasks = new List<Task>();
+
+            for (int i = 0; i < allBatches.Count; i++)
+            {
+                var batchIndex = i;
+                var batch = allBatches[i];
+
+                var task = Task.Run(async () =>
+                {
+                    await semaphore.WaitAsync(cancellationToken);
+                    try
+                    {
+                        // Each task gets its own PostgreSQL connection
+                        await using var pgConnParallel = new NpgsqlConnection(pgConnString);
+                        await pgConnParallel.OpenAsync(cancellationToken);
+
+                        await ProcessBinaryBatchParallelAsync(
+                            pgConnParallel, 
+                            batch, 
+                            batchIndex, 
+                            allBatches.Count, 
+                            status, 
+                            cancellationToken);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, cancellationToken);
+
+                processingTasks.Add(task);
+            }
+
+            // Wait for all batches to complete
+            await Task.WhenAll(processingTasks);
+
+            // Clear memory
+            allBatches.Clear();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
 
             status.SkippedFiles = skippedEmpty + skippedLarge;
             _logger.LogInformation($"Binary migration complete: Processed={status.ProcessedFiles}, Skipped={status.SkippedFiles}");
@@ -287,11 +331,12 @@ namespace DataMigration.Services
 
         private async Task ProcessBinaryBatchAsync(
             NpgsqlConnection pgConn,
-            List<(long id, long size, Func<CancellationToken, Task<Stream>> streamFactory)> batch,
+            List<(long id, byte[] data)> batch,
             BinaryMigrationStatus status,
             CancellationToken cancellationToken)
         {
             var batchStart = DateTime.UtcNow;
+            _logger.LogInformation($"Processing batch of {batch.Count} files...");
 
             // Create temp table for this batch
             var createTempSql = @"
@@ -304,7 +349,7 @@ namespace DataMigration.Services
             await using (var createCmd = new NpgsqlCommand(createTempSql, pgConn))
                 await createCmd.ExecuteNonQueryAsync(cancellationToken);
 
-            // Binary import
+            // Binary import - directly write byte arrays (MUCH faster than streams)
             await using (var importer = pgConn.BeginBinaryImport(
                 "COPY tmp_pr_attachments_bin (pr_attachment_id, pr_attachment_data) FROM STDIN (FORMAT BINARY)"))
             {
@@ -314,20 +359,12 @@ namespace DataMigration.Services
 
                     importer.StartRow();
                     importer.Write(item.id, NpgsqlDbType.Bigint);
-
-                    await using var stream = await item.streamFactory(cancellationToken);
-                    importer.Write(stream, NpgsqlDbType.Bytea);
+                    importer.Write(item.data, NpgsqlDbType.Bytea);
 
                     status.ProcessedFiles++;
                     status.ProgressPercentage = status.TotalFiles > 0
                         ? (int)((double)status.ProcessedFiles / status.TotalFiles * 100)
                         : 0;
-
-                    // Notify progress periodically
-                    if (status.ProcessedFiles % 5 == 0)
-                    {
-                        await NotifyStatusUpdate(status);
-                    }
                 }
 
                 await importer.CompleteAsync(cancellationToken);
@@ -345,9 +382,86 @@ namespace DataMigration.Services
             await mergeCmd.ExecuteNonQueryAsync(cancellationToken);
 
             var batchDuration = (DateTime.UtcNow - batchStart).TotalSeconds;
-            status.CurrentOperation = $"Processed batch of {batch.Count} files in {batchDuration:F1}s";
+            var throughput = batch.Count / batchDuration;
+            status.CurrentOperation = $"Batch complete: {batch.Count} files in {batchDuration:F1}s ({throughput:F1} files/sec)";
             
+            _logger.LogInformation(status.CurrentOperation);
             await NotifyStatusUpdate(status);
+        }
+
+        private async Task ProcessBinaryBatchParallelAsync(
+            NpgsqlConnection pgConn,
+            List<(long id, byte[] data)> batch,
+            int batchIndex,
+            int totalBatches,
+            BinaryMigrationStatus status,
+            CancellationToken cancellationToken)
+        {
+            var batchStart = DateTime.UtcNow;
+            _logger.LogInformation($"Processing batch {batchIndex + 1}/{totalBatches} ({batch.Count} files)...");
+
+            // Create temp table with unique name for this batch to avoid conflicts in parallel execution
+            var tempTableName = $"tmp_pr_attachments_bin_{Guid.NewGuid():N}";
+            var createTempSql = $@"
+                CREATE TEMP TABLE {tempTableName} (
+                    pr_attachment_id bigint,
+                    pr_attachment_data bytea
+                );";
+
+            await using (var createCmd = new NpgsqlCommand(createTempSql, pgConn))
+                await createCmd.ExecuteNonQueryAsync(cancellationToken);
+
+            // Binary import - directly write byte arrays
+            await using (var importer = pgConn.BeginBinaryImport(
+                $"COPY {tempTableName} (pr_attachment_id, pr_attachment_data) FROM STDIN (FORMAT BINARY)"))
+            {
+                foreach (var item in batch)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    importer.StartRow();
+                    importer.Write(item.id, NpgsqlDbType.Bigint);
+                    importer.Write(item.data, NpgsqlDbType.Bytea);
+
+                    // Thread-safe increment
+                    var newProcessedCount = Interlocked.Increment(ref status.ProcessedFiles);
+                    
+                    // Update progress percentage (thread-safe)
+                    var newProgress = status.TotalFiles > 0
+                        ? (int)((double)newProcessedCount / status.TotalFiles * 100)
+                        : 0;
+                    
+                    if (newProgress != status.ProgressPercentage)
+                    {
+                        status.ProgressPercentage = newProgress;
+                        _ = NotifyStatusUpdate(status);
+                    }
+                }
+
+                await importer.CompleteAsync(cancellationToken);
+            }
+
+            // Merge into target table
+            var mergeSql = $@"
+                UPDATE pr_attachments t
+                SET pr_attachment_data = b.pr_attachment_data,
+                    modified_date = CURRENT_TIMESTAMP
+                FROM {tempTableName} b
+                WHERE t.pr_attachment_id = b.pr_attachment_id;";
+
+            await using var mergeCmd = new NpgsqlCommand(mergeSql, pgConn);
+            await mergeCmd.ExecuteNonQueryAsync(cancellationToken);
+
+            // Clean up temp table
+            var dropTempSql = $"DROP TABLE IF EXISTS {tempTableName};";
+            await using var dropCmd = new NpgsqlCommand(dropTempSql, pgConn);
+            await dropCmd.ExecuteNonQueryAsync(cancellationToken);
+
+            var batchDuration = (DateTime.UtcNow - batchStart).TotalSeconds;
+            var throughput = batch.Count / batchDuration;
+            
+            _logger.LogInformation(
+                $"✓ Batch {batchIndex + 1}/{totalBatches} complete: {batch.Count} files in {batchDuration:F1}s ({throughput:F1} files/sec)");
         }
 
         private async Task NotifyStatusUpdate(BinaryMigrationStatus status)
@@ -396,7 +510,7 @@ namespace DataMigration.Services
         public string TableName { get; set; } = "";
         public BinaryMigrationState State { get; set; }
         public int TotalFiles { get; set; }
-        public int ProcessedFiles { get; set; }
+        public int ProcessedFiles;
         public int SkippedFiles { get; set; }
         public int ProgressPercentage { get; set; }
         public string CurrentOperation { get; set; } = "";

@@ -18,12 +18,16 @@ namespace DataMigration.Services
         /// <param name="skippedRecords">Optional list of skipped records (RecordId, Reason).</param>
         public static void ExportToExcel(string filePath, int totalCount, int insertedCount, int skippedCount, ILogger logger, List<(string RecordId, string Reason)>? skippedRecords = null)
         {
-            // Ensure migration_outputs folder exists
-            var outputDir = Path.Combine(Directory.GetCurrentDirectory(), "migration_outputs");
+            // Determine subfolder based on whether there are skipped records
+            var baseOutputDir = Path.Combine(Directory.GetCurrentDirectory(), "migration_outputs");
+            var subFolder = skippedCount > 0 ? "with_skipped" : "no_skipped";
+            var outputDir = Path.Combine(baseOutputDir, subFolder);
+            
             if (!Directory.Exists(outputDir))
             {
                 Directory.CreateDirectory(outputDir);
             }
+            
             // Use only filename if filePath is not rooted
             var fileName = Path.GetFileName(filePath);
             var fullPath = Path.Combine(outputDir, fileName);

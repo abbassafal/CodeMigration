@@ -125,7 +125,7 @@ namespace DataMigration.Services
                         // Validate required fields
                         if (!record.FreezeCurrencyId.HasValue)
                         {
-                            _logger.LogWarning($"Record skipped: FreezeCurrencyId is NULL");
+                            _migrationLogger?.LogSkipped("FreezeCurrencyId is NULL", "Unknown");
                             skippedRecords++;
                             continue;
                         }
@@ -133,7 +133,7 @@ namespace DataMigration.Services
                         // Validate event_id exists (FK constraint)
                         if (!record.Eventid.HasValue || !validEventIds.Contains(record.Eventid.Value))
                         {
-                            _logger.LogDebug($"FreezeCurrencyId {record.FreezeCurrencyId}: event_id {record.Eventid} not found in event_master (FK constraint violation)");
+                            _migrationLogger?.LogSkipped($"event_id {record.Eventid} not found in event_master (FK constraint violation)", $"FreezeCurrencyId={record.FreezeCurrencyId}");
                             skippedRecords++;
                             continue;
                         }
@@ -174,9 +174,8 @@ namespace DataMigration.Services
                     }
                     catch (Exception ex)
                     {
-                        var errorMsg = $"FreezeCurrencyId {record.FreezeCurrencyId}: {ex.Message}";
-                        _logger.LogError(errorMsg);
-                        errors.Add(errorMsg);
+                        _migrationLogger?.LogError($"Exception during processing: {ex.Message}", $"FreezeCurrencyId={record.FreezeCurrencyId}", ex);
+                        errors.Add($"FreezeCurrencyId {record.FreezeCurrencyId}: {ex.Message}");
                         skippedRecords++;
                     }
                 }

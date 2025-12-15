@@ -320,7 +320,7 @@ public class NfaHeaderMigration : MigrationService
             meeting_quality_requirement = EXCLUDED.meeting_quality_requirement,
             purchase_order_should_be_allotted_to_l1_supplier = EXCLUDED.purchase_order_should_be_allotted_to_l1_supplier,
             technically_appoved_justification = EXCLUDED.technically_appoved_justification,
-            commerclal_tc_justification = EXCLUDED.commerclal.tc_justification,
+            commerclal_tc_justification = EXCLUDED.commerclal_tc_justification,
             meeting_delivery_timeline_expectation_justification = EXCLUDED.meeting_delivery_timeline_expectation_justification,
             meeting_quality_requirement_justification = EXCLUDED.meeting_quality_requirement_justification,
             purchase_order_should_be_allotted_to_l1_supplier_justification = EXCLUDED.purchase_order_should_be_allotted_to_l1_supplier_justification,

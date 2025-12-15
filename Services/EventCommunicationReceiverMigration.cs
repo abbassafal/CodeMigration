@@ -78,7 +78,10 @@ namespace DataMigration.Services
                 {
                     while (await reader.ReadAsync())
                     {
-                        validEcSenderIds.Add(reader.GetInt32(0));
+                        // Handle both INT and BIGINT from PostgreSQL
+                        var fieldType = reader.GetFieldType(0);
+                        var value = fieldType == typeof(long) ? (int)reader.GetInt64(0) : reader.GetInt32(0);
+                        validEcSenderIds.Add(value);
                     }
                 }
                 _logger.LogInformation($"Built ec_senderid lookup with {validEcSenderIds.Count} entries");
@@ -93,7 +96,10 @@ namespace DataMigration.Services
                 {
                     while (await reader.ReadAsync())
                     {
-                        validUserIds.Add(reader.GetInt32(0));
+                        // Handle both INT and BIGINT from PostgreSQL
+                        var fieldType = reader.GetFieldType(0);
+                        var value = fieldType == typeof(long) ? (int)reader.GetInt64(0) : reader.GetInt32(0);
+                        validUserIds.Add(value);
                     }
                 }
                 _logger.LogInformation($"Built user_id lookup with {validUserIds.Count} entries");
@@ -119,12 +125,13 @@ namespace DataMigration.Services
                     {
                         sourceData.Add(new SourceRow
                         {
-                            MailMsgSubId = reader.GetInt32(0),
-                            MailMsgMainId = reader.IsDBNull(1) ? null : reader.GetInt32(1),
-                            ToUserId = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                            // Handle both int and bigint from SQL Server
+                            MailMsgSubId = reader.GetFieldType(0) == typeof(long) ? (int)reader.GetInt64(0) : reader.GetInt32(0),
+                            MailMsgMainId = reader.IsDBNull(1) ? null : (reader.GetFieldType(1) == typeof(long) ? (int?)reader.GetInt64(1) : reader.GetInt32(1)),
+                            ToUserId = reader.IsDBNull(2) ? null : (reader.GetFieldType(2) == typeof(long) ? (int?)reader.GetInt64(2) : reader.GetInt32(2)),
                             ToUserType = reader.IsDBNull(3) ? null : reader.GetString(3),
                             ToMailId = reader.IsDBNull(4) ? null : reader.GetString(4),
-                            ReadStatus = reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                            ReadStatus = reader.IsDBNull(5) ? null : (reader.GetFieldType(5) == typeof(long) ? (int?)reader.GetInt64(5) : reader.GetInt32(5)),
                             ReadDate = reader.IsDBNull(6) ? null : reader.GetDateTime(6)
                         });
                     }
@@ -142,14 +149,16 @@ namespace DataMigration.Services
                         // Validate ec_senderid (REQUIRED - NOT NULL, FK)
                         if (!record.MailMsgMainId.HasValue)
                         {
-                            _logger.LogWarning($"Skipping MailMsgSubId {record.MailMsgSubId}: MailMsgMainId is null");
+                            _migrationLogger.LogSkipped("MailMsgMainId is null", $"MailMsgSubId={record.MailMsgSubId}");
                             skippedRecords++;
                             continue;
                         }
 
                         if (!validEcSenderIds.Contains(record.MailMsgMainId.Value))
                         {
-                            _logger.LogWarning($"Skipping MailMsgSubId {record.MailMsgSubId}: ec_senderid={record.MailMsgMainId} not found in event_communication_sender");
+                            _migrationLogger.LogSkipped($"ec_senderid={record.MailMsgMainId} not found in event_communication_sender", 
+                                $"MailMsgSubId={record.MailMsgSubId}", 
+                                new Dictionary<string, object> { { "ec_senderid", record.MailMsgMainId.Value } });
                             skippedRecords++;
                             continue;
                         }
@@ -157,14 +166,16 @@ namespace DataMigration.Services
                         // Validate receiver_userid (REQUIRED - NOT NULL)
                         if (!record.ToUserId.HasValue)
                         {
-                            _logger.LogWarning($"Skipping MailMsgSubId {record.MailMsgSubId}: ToUserId is null");
+                            _migrationLogger.LogSkipped("ToUserId is null", $"MailMsgSubId={record.MailMsgSubId}");
                             skippedRecords++;
                             continue;
                         }
 
                         if (!validUserIds.Contains(record.ToUserId.Value))
                         {
-                            _logger.LogWarning($"Skipping MailMsgSubId {record.MailMsgSubId}: ToUserId={record.ToUserId} not found in users");
+                            _migrationLogger.LogSkipped($"ToUserId={record.ToUserId} not found in users", 
+                                $"MailMsgSubId={record.MailMsgSubId}", 
+                                new Dictionary<string, object> { { "ToUserId", record.ToUserId.Value } });
                             skippedRecords++;
                             continue;
                         }
@@ -172,14 +183,14 @@ namespace DataMigration.Services
                         // Validate required text fields (NOT NULL constraints)
                         if (string.IsNullOrWhiteSpace(record.ToUserType))
                         {
-                            _logger.LogWarning($"Skipping MailMsgSubId {record.MailMsgSubId}: ToUserType is null/empty");
+                            _migrationLogger.LogSkipped("ToUserType is null/empty", $"MailMsgSubId={record.MailMsgSubId}");
                             skippedRecords++;
                             continue;
                         }
 
                         if (string.IsNullOrWhiteSpace(record.ToMailId))
                         {
-                            _logger.LogWarning($"Skipping MailMsgSubId {record.MailMsgSubId}: ToMailId is null/empty");
+                            _migrationLogger.LogSkipped("ToMailId is null/empty", $"MailMsgSubId={record.MailMsgSubId}");
                             skippedRecords++;
                             continue;
                         }
@@ -211,7 +222,9 @@ namespace DataMigration.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"Error processing MailMsgSubId {record.MailMsgSubId}: {ex.Message}");
+                        _migrationLogger.LogSkipped($"Error processing record: {ex.Message}", 
+                            $"MailMsgSubId={record.MailMsgSubId}", 
+                            new Dictionary<string, object> { { "Exception", ex.GetType().Name } });
                         skippedRecords++;
                     }
                 }

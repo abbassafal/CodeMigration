@@ -172,7 +172,7 @@ ON CONFLICT (event_collaboration_id) DO UPDATE SET
             // Validate required foreign keys
             if (eventId == DBNull.Value)
             {
-                _logger.LogWarning($"Skipping EVENTSELUSERID {eventSelUserId}: EVENTID is NULL.");
+                _migrationLogger?.LogSkipped("EVENTID is NULL", $"EVENTSELUSERID={eventSelUserId}");
                 skippedCount++;
                 continue;
             }
@@ -180,14 +180,14 @@ ON CONFLICT (event_collaboration_id) DO UPDATE SET
             int eventIdValue = Convert.ToInt32(eventId);
             if (!validEventIds.Contains(eventIdValue))
             {
-                _logger.LogWarning($"Skipping EVENTSELUSERID {eventSelUserId}: EVENTID {eventIdValue} not found in event_master.");
+                _migrationLogger?.LogSkipped($"EVENTID {eventIdValue} not found in event_master", $"EVENTSELUSERID={eventSelUserId}");
                 skippedCount++;
                 continue;
             }
 
             if (userId == DBNull.Value)
             {
-                _logger.LogWarning($"Skipping EVENTSELUSERID {eventSelUserId}: USERID is NULL.");
+                _migrationLogger?.LogSkipped("USERID is NULL", $"EVENTSELUSERID={eventSelUserId}");
                 skippedCount++;
                 continue;
             }
@@ -195,7 +195,7 @@ ON CONFLICT (event_collaboration_id) DO UPDATE SET
             int userIdValue = Convert.ToInt32(userId);
             if (!validUserIds.Contains(userIdValue))
             {
-                _logger.LogWarning($"Skipping EVENTSELUSERID {eventSelUserId}: USERID {userIdValue} not found in users table.");
+                _migrationLogger?.LogSkipped($"USERID {userIdValue} not found in users table", $"EVENTSELUSERID={eventSelUserId}");
                 skippedCount++;
                 continue;
             }

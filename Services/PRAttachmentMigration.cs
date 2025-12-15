@@ -85,7 +85,7 @@ public class PRAttachmentMigration : MigrationService
         return new List<string>
         {
             "PRATTACHMENTID -> pr_attachment_id (Direct)",
-            "PRTRANSID -> erp_pr_lines_id (Direct)",
+            "PRID -> erp_pr_lines_id (Direct)",
             "UPLOADPATH -> upload_path (Direct)",
             "FILENAME -> file_name (Direct)",
             "Remarks -> remarks (Direct)",
@@ -105,7 +105,7 @@ public class PRAttachmentMigration : MigrationService
     public override List<object> GetMappings() => new List<object>
     {
         new { source = "PRATTACHMENTID", target = "pr_attachment_id" },
-        new { source = "PRTRANSID", target = "erp_pr_lines_id" },
+        new { source = "PRID", target = "erp_pr_lines_id" },
         new { source = "UPLOADPATH", target = "upload_path" },
         new { source = "FILENAME", target = "file_name" },
         new { source = "Remarks", target = "remarks" },
@@ -141,16 +141,16 @@ public class PRAttachmentMigration : MigrationService
 
         await using var sqlConn = new SqlConnection(sqlConnString);
         await using var pgConn = new NpgsqlConnection(pgConnString);
-        
         await sqlConn.OpenAsync(cancellationToken);
         await pgConn.OpenAsync(cancellationToken);
 
         _logger.LogInformation("Starting COPY-optimized PRAttachment migration (metadata only - binaries will be handled by background service)");
 
         // Track migration statistics
-        var skippedRecords = new List<(string RecordId, string Reason)>();
         int totalRecords = 0;
         int insertedRecords = 0;
+        int skippedCount = 0;
+        List<(string, string)> skippedRecordsList = new();
 
         try
         {
@@ -160,7 +160,7 @@ public class PRAttachmentMigration : MigrationService
             _logger.LogInformation($"Total records to migrate: {totalRecords:N0}");
 
             // Phase 1: COPY metadata (no binary column)
-            insertedRecords = await CopyMetadataAsync(sqlConn, pgConn, cancellationToken);
+            (insertedRecords, skippedCount, skippedRecordsList) = await CopyMetadataAsync(sqlConn, pgConn, cancellationToken);
 
             // Phase 2: apply metadata merge into pr_attachments
             int merged = await MergeMetadataAsync(pgConn, cancellationToken);
@@ -168,83 +168,43 @@ public class PRAttachmentMigration : MigrationService
             _logger.LogInformation($"Metadata migration completed: metadataRows={insertedRecords}, merged={merged}. Binary migration will run in background.");
 
             // Export migration stats to Excel
-            string outputPath = "pr_attachment_migration_stats.xlsx";
+            var outputPath = $"PRAttachmentMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}.xlsx";
             MigrationStatsExporter.ExportToExcel(
                 outputPath,
                 totalRecords,
                 insertedRecords,
-                totalRecords - insertedRecords,
+                skippedCount,
                 _logger,
-                skippedRecords
+                skippedRecordsList
             );
-            _logger.LogInformation($"Migration stats exported to migration_outputs/{outputPath}");
+            _logger.LogInformation($"Migration stats exported to {outputPath}");
 
             return merged;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Migration failed");
-            
             // Export stats even on failure
-            string outputPath = "pr_attachment_migration_stats.xlsx";
+            var outputPath = $"PRAttachmentMigration_{DateTime.UtcNow:yyyyMMdd_HHmmss}_FAILED.xlsx";
             MigrationStatsExporter.ExportToExcel(
                 outputPath,
                 totalRecords,
                 insertedRecords,
-                totalRecords - insertedRecords,
+                skippedCount,
                 _logger,
-                skippedRecords
+                skippedRecordsList
             );
-            _logger.LogInformation($"Migration stats exported to migration_outputs/{outputPath} (migration failed)");
-            
+            _logger.LogInformation($"Migration stats exported to {outputPath} (migration failed)");
             throw;
         }
     }
 
-    /// <summary>
-    /// Migrate only metadata (without binary data) - used for fast initial migration
-    /// </summary>
-    public async Task<int> MigrateMetadataOnlyAsync(CancellationToken cancellationToken = default)
-    {
-        return await MigrateAsync(cancellationToken);
-    }
-
-    /// <summary>
-    /// Legacy method: Migrate both metadata and binaries synchronously (blocks until complete)
-    /// Use this only for small datasets or testing. For production, use MigrateAsync + background service.
-    /// </summary>
-    public async Task<int> MigrateSynchronousAsync(CancellationToken cancellationToken = default)
-    {
-        var sqlConnString = _configuration.GetConnectionString("SqlServer");
-        var pgConnString = _configuration.GetConnectionString("PostgreSql");
-        if (string.IsNullOrEmpty(sqlConnString) || string.IsNullOrEmpty(pgConnString))
-            throw new InvalidOperationException("Connection strings not configured");
-
-        await using var sqlConn = new SqlConnection(sqlConnString);
-        await using var pgConn = new NpgsqlConnection(pgConnString);
-        
-        await sqlConn.OpenAsync(cancellationToken);
-        await pgConn.OpenAsync(cancellationToken);
-
-        _logger.LogInformation("Starting SYNCHRONOUS PRAttachment migration (metadata + binaries)");
-
-        // Phase 1: COPY metadata
-        int metadataRows = await CopyMetadataAsync(sqlConn, pgConn, cancellationToken);
-
-        // Phase 2: Merge metadata
-        int merged = await MergeMetadataAsync(pgConn, cancellationToken);
-
-        // Phase 3: Stream binaries synchronously
-        int binariesUpdated = await StreamBinariesAsync(sqlConn, pgConn, cancellationToken);
-
-        _logger.LogInformation($"Synchronous migration completed: metadataRows={metadataRows}, merged={merged}, binariesUpdated={binariesUpdated}");
-        return merged;
-    }
-
-    private async Task<int> CopyMetadataAsync(SqlConnection sqlConn, NpgsqlConnection pgConn, CancellationToken cancellationToken)
+    private async Task<(int insertedCount, int skippedCount, List<(string, string)> skippedRecordsList)> CopyMetadataAsync(SqlConnection sqlConn, NpgsqlConnection pgConn, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Phase 1: Copying metadata into temporary table via binary COPY");
-
+        int rowCount = 0;
+        int skippedCount = 0;
+        List<(string, string)> skippedRecordsList = new();
         try
         {
             // Create temp table for metadata (no binary column)
@@ -275,7 +235,12 @@ public class PRAttachmentMigration : MigrationService
             await using (var createCmd = new NpgsqlCommand(createTempSql, pgConn))
                 await createCmd.ExecuteNonQueryAsync(cancellationToken);
 
-            _logger.LogInformation("Temporary table created. Starting data read from SQL Server...");
+            _logger.LogInformation("Temporary table created. Loading valid foreign keys...");
+
+            // Load valid erp_pr_lines_ids for FK validation
+            var validErpPrLinesIds = await LoadValidErpPrLinesIdsAsync(pgConn, cancellationToken);
+
+            _logger.LogInformation("Starting data read from SQL Server...");
 
             // First, check how many records we need to migrate
             var countCmd = new SqlCommand("SELECT COUNT(*) FROM TBL_PRATTACHMENT", sqlConn);
@@ -285,7 +250,7 @@ public class PRAttachmentMigration : MigrationService
             if (totalRecords == 0)
             {
                 _logger.LogWarning("No records found in TBL_PRATTACHMENT");
-                return 0;
+                return (0, 0, skippedRecordsList);
             }
 
             // We'll stream rows from SQL Server and use BeginBinaryImport to copy into tmp_pr_attachments_meta
@@ -297,20 +262,14 @@ public class PRAttachmentMigration : MigrationService
             using var reader = await selectCmd.ExecuteReaderAsync(cancellationToken); // No need for SequentialAccess without blobs
             _logger.LogInformation("SQL Server reader opened successfully. Starting COPY import...");
 
-            int rowCount = 0;
             int progressInterval = 10; // Log every 10 rows initially for debugging
-            
-            // Begin binary import
-            _logger.LogInformation("Initiating BeginBinaryImport...");
             await using (var importer = pgConn.BeginBinaryImport(
                 "COPY tmp_pr_attachments_meta (pr_attachment_id, erp_pr_lines_id, upload_path, file_name, remarks, is_header_doc, pr_attachment_extensions, created_by, created_date, modified_by, modified_date, is_deleted, deleted_by, deleted_date) FROM STDIN (FORMAT BINARY)"))
             {
                 _logger.LogInformation("Binary COPY import started. Reading first record from SQL Server...");
-                
                 while (await reader.ReadAsync(cancellationToken))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-
                     try
                     {
                         // Read only required columns in EXACT SELECT order for SelectMetadataQuery (no binary column)
@@ -318,17 +277,26 @@ public class PRAttachmentMigration : MigrationService
                         var prAttachmentId = reader.IsDBNull(0) ? (long?)null : Convert.ToInt64(reader.GetValue(0));
                         if (rowCount == 0)
                             _logger.LogInformation($"First record ID: {prAttachmentId}");
-
-                        // skip PRID (1)
-                        if (!reader.IsDBNull(1)) _ = reader.GetValue(1);
+                        var prId = reader.IsDBNull(1) ? (long?)null : Convert.ToInt64(reader.GetValue(1));
                         var uploadPath = reader.IsDBNull(2) ? null : reader.GetString(2);
                         var fileName = reader.IsDBNull(3) ? null : reader.GetString(3);
-                        // skip uploadedById (4)
                         if (!reader.IsDBNull(4)) _ = reader.GetValue(4);
-                        var prTransId = reader.IsDBNull(5) ? (long?)null : Convert.ToInt64(reader.GetValue(5));
+                        if (!reader.IsDBNull(5)) _ = reader.GetValue(5);
                         var remarks = reader.IsDBNull(6) ? null : reader.GetString(6);
                         var prAttType = reader.IsDBNull(7) ? null : reader.GetString(7);
-
+                        // Validate FK: Skip if PRID is NULL or not found in erp_pr_lines
+                        if (!prId.HasValue)
+                        {
+                            skippedRecordsList.Add(($"PRATTACHMENTID={prAttachmentId}", "PRID is NULL"));
+                            skippedCount++;
+                            continue;
+                        }
+                        if (!validErpPrLinesIds.Contains(prId.Value))
+                        {
+                            skippedRecordsList.Add(($"PRATTACHMENTID={prAttachmentId}", $"PRID {prId.Value} not found in erp_pr_lines (FK constraint violation)"));
+                            skippedCount++;
+                            continue;
+                        }
                         // Set defaults for columns that don't exist in source
                         var createdBy = (int?)0;
                         var createdDate = (DateTime?)DateTime.UtcNow;
@@ -337,10 +305,9 @@ public class PRAttachmentMigration : MigrationService
                         var isDeleted = false;
                         var deletedBy = (int?)null;
                         var deletedDate = (DateTime?)null;
-
                         importer.StartRow();
                         importer.Write(prAttachmentId, NpgsqlDbType.Bigint);
-                        importer.Write(prTransId, NpgsqlDbType.Bigint);
+                        importer.Write(prId, NpgsqlDbType.Bigint); // PRID -> erp_pr_lines_id
                         importer.Write(uploadPath, NpgsqlDbType.Text);
                         importer.Write(fileName, NpgsqlDbType.Text);
                         importer.Write(remarks, NpgsqlDbType.Text);
@@ -353,13 +320,11 @@ public class PRAttachmentMigration : MigrationService
                         importer.Write(isDeleted, NpgsqlDbType.Boolean);
                         importer.Write(deletedBy, NpgsqlDbType.Integer);
                         importer.Write(deletedDate, NpgsqlDbType.TimestampTz);
-
                         rowCount++;
                         if (rowCount == 1)
                         {
                             _logger.LogInformation("First record written successfully!");
                         }
-
                         // Log progress
                         if (rowCount % progressInterval == 0)
                         {
@@ -369,6 +334,11 @@ public class PRAttachmentMigration : MigrationService
                                 progressInterval = 500; // Log every 500 rows after first 100
                                 _logger.LogInformation("Switching to log every 500 records...");
                             }
+                            else if (rowCount == 5000)
+                            {
+                                progressInterval = 5000; // Log every 5000 rows after first 5000
+                                _logger.LogInformation("Switching to log every 5000 records...");
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -376,22 +346,13 @@ public class PRAttachmentMigration : MigrationService
                         _logger.LogError(ex, $"Error processing record at row {rowCount + 1}");
                         throw;
                     }
-
-                    // commit importer periodically by completing and reopening every COPY_BATCH_ROWS rows to avoid huge transactions
-                    if (rowCount % COPY_BATCH_ROWS == 0)
-                    {
-                        await importer.CompleteAsync(cancellationToken);
-                        _logger.LogInformation($"Batch commit: Copied {rowCount:N0} metadata rows so far");
-                    }
                 }
-
-                // finalize
+                // finalize - only complete once at the end
                 _logger.LogInformation("Finalizing COPY import...");
                 await importer.CompleteAsync(cancellationToken);
             }
-
-            _logger.LogInformation($"Phase 1 complete: copied {rowCount:N0} metadata rows into tmp_pr_attachments_meta");
-            return rowCount;
+            _logger.LogInformation($"Phase 1 complete: copied {rowCount:N0} metadata rows, skipped {_migrationLogger?.SkippedCount ?? 0:N0} rows (FK violations or NULL PRID)");
+            return (rowCount, skippedCount, skippedRecordsList);
         }
         catch (Exception ex)
         {
@@ -607,5 +568,23 @@ public class PRAttachmentMigration : MigrationService
         await using var cmd = new NpgsqlCommand(mergeSql, pgConn);
         var result = await cmd.ExecuteScalarAsync(cancellationToken);
         return result != null && result != DBNull.Value ? Convert.ToInt32(result) : 0;
+    }
+
+    private async Task<HashSet<long>> LoadValidErpPrLinesIdsAsync(NpgsqlConnection pgConn, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Loading valid erp_pr_lines_ids for FK validation...");
+        var validIds = new HashSet<long>();
+        
+        var query = "SELECT erp_pr_lines_id FROM erp_pr_lines";
+        await using var cmd = new NpgsqlCommand(query, pgConn);
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            validIds.Add(reader.GetInt64(0));
+        }
+        
+        _logger.LogInformation($"Loaded {validIds.Count:N0} valid erp_pr_lines_ids");
+        return validIds;
     }
 }
