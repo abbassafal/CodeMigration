@@ -10,9 +10,11 @@ using DataMigration.Services;
 
 public class NfaLineMigration : MigrationService
 {
-    private const int BATCH_SIZE = 200;
+    private const int BATCH_SIZE = 1000;
     private readonly ILogger<NfaLineMigration> _logger;
     private MigrationLogger? _migrationLogger;
+    private HashSet<int> _validNfaHeaderIds = new HashSet<int>();
+    private Dictionary<int, int> _uomIdMap = new Dictionary<int, int>();
 
     public NfaLineMigration(IConfiguration configuration, ILogger<NfaLineMigration> logger) : base(configuration)
     {
@@ -20,6 +22,36 @@ public class NfaLineMigration : MigrationService
     }
 
     public MigrationLogger? GetLogger() => _migrationLogger;
+    
+    // Load valid nfa_header IDs at the start of migration to avoid N+1 queries
+    private async Task LoadValidNfaHeaderIdsAsync(NpgsqlConnection pgConn)
+    {
+        _validNfaHeaderIds.Clear();
+        using var cmd = new NpgsqlCommand("SELECT nfa_header_id FROM nfa_header WHERE nfa_header_id IS NOT NULL ORDER BY nfa_header_id", pgConn);
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            _validNfaHeaderIds.Add(reader.GetInt32(0));
+        }
+        _logger.LogInformation($"Loaded {_validNfaHeaderIds.Count} valid nfa_header IDs");
+    }
+    
+    // Load UOM ID mapping at the start to avoid N+1 queries
+    private async Task LoadUomIdMapAsync(NpgsqlConnection pgConn)
+    {
+        _uomIdMap.Clear();
+        using var cmd = new NpgsqlCommand("SELECT uom_id, uom_code FROM uom_master WHERE uom_id IS NOT NULL", pgConn);
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            int uomId = reader.GetInt32(0);
+            if (!reader.IsDBNull(1))
+            {
+                _uomIdMap[uomId] = uomId;
+            }
+        }
+        _logger.LogInformation($"Loaded {_uomIdMap.Count} UOM ID mappings");
+    }
 
     protected override string SelectQuery => @"
         SELECT
@@ -284,6 +316,12 @@ public class NfaLineMigration : MigrationService
 
         try
         {
+            // Load valid nfa_header IDs first to avoid N+1 queries
+            await LoadValidNfaHeaderIdsAsync(pgConn);
+            
+            // Load UOM ID mapping to avoid N+1 queries
+            await LoadUomIdMapAsync(pgConn);
+            
             // Load PO Condition arrays for each AwardEventItem
             var poConditionArrays = await LoadPoConditionArraysAsync(sqlConn);
             _logger.LogInformation($"Loaded {poConditionArrays.Count} PO condition arrays");
@@ -334,10 +372,9 @@ public class NfaLineMigration : MigrationService
                     continue;
                 }
 
-                // Verify nfa_header_id exists in nfa_header table
+                // Verify nfa_header_id exists in nfa_header table using pre-loaded HashSet
                 int awardEventMainIdValue = Convert.ToInt32(awardEventMainId);
-                bool headerExists = await VerifyNfaHeaderExistsAsync(pgConn, awardEventMainIdValue);
-                if (!headerExists)
+                if (!_validNfaHeaderIds.Contains(awardEventMainIdValue))
                 {
                     skippedRecords++;
                     _logger.LogWarning($"Skipping record {awardEventItemValue} - nfa_header_id {awardEventMainIdValue} does not exist in nfa_header table");
@@ -373,15 +410,16 @@ public class NfaLineMigration : MigrationService
                 if (sourceUomId != DBNull.Value && Convert.ToInt32(sourceUomId) > 0)
                 {
                     int sourceUomIdValue = Convert.ToInt32(sourceUomId);
-                    // Check if this Uomid exists in uom_master
-                    var checkQuery = "SELECT uom_code FROM uom_master WHERE uom_id = @uomId";
-                    using var checkCmd = new NpgsqlCommand(checkQuery, pgConn);
-                    checkCmd.Parameters.AddWithValue("@uomId", sourceUomIdValue);
-                    var result = await checkCmd.ExecuteScalarAsync();
-                    if (result != null)
+                    // Check if this Uomid exists in pre-loaded map
+                    if (_uomIdMap.ContainsKey(sourceUomIdValue))
                     {
                         uomId = sourceUomIdValue;
-                        uomCodeValue = result.ToString();
+                        // Get uom_code from the uomCodeMap if needed
+                        var uomCode = reader["UOM"];
+                        if (uomCode != DBNull.Value && !string.IsNullOrEmpty(uomCode.ToString()))
+                        {
+                            uomCodeValue = uomCode.ToString()!.Trim();
+                        }
                     }
                 }
                 
@@ -587,71 +625,37 @@ public class NfaLineMigration : MigrationService
         }
         try
         {
-            // SKIP LOGIC: Query for existing nfa_line_id in the batch
-            var nfaLineIds = batch.Select(r => r["nfa_line_id"]).ToList();
-            var existingIds = new HashSet<int>();
-            if (nfaLineIds.Count > 0)
+            // Use PostgreSQL COPY for high-performance bulk insert
+            var columns = batch.First().Keys.ToList();
+            var copyCommand = $"COPY nfa_line ({string.Join(", ", columns)}) FROM STDIN (FORMAT BINARY)";
+            
+            try
             {
-                var paramNames = nfaLineIds.Select((id, idx) => $"@id{idx}").ToArray();
-                var query = $"SELECT nfa_line_id FROM nfa_line WHERE nfa_line_id IN ({string.Join(",", paramNames)})";
-                using (var cmd = new NpgsqlCommand(query, pgConn, transaction))
+                using (var writer = pgConn.BeginBinaryImport(copyCommand))
                 {
-                    for (int i = 0; i < nfaLineIds.Count; i++)
+                    foreach (var record in batch)
                     {
-                        cmd.Parameters.AddWithValue($"@id{i}", nfaLineIds[i]);
-                    }
-                    using (var reader = await cmd.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
+                        writer.StartRow();
+                        foreach (var col in columns)
                         {
-                            existingIds.Add(reader.GetInt32(0));
+                            var value = record[col];
+                            writer.Write(value == DBNull.Value ? null : value);
                         }
                     }
+                    insertedCount = (int)await writer.CompleteAsync();
                 }
             }
-            // Remove records with duplicate PKs and log them as skipped
-            var toInsert = new List<Dictionary<string, object>>();
-            foreach (var record in batch)
+            catch (PostgresException pgEx) when (pgEx.SqlState == "23505") // Unique violation
             {
-                int nfaLineId = Convert.ToInt32(record["nfa_line_id"]);
-                if (existingIds.Contains(nfaLineId))
-                {
-                    _logger.LogWarning($"Skipping record {nfaLineId} - nfa_line_id already exists in target table");
-                    _migrationLogger?.LogSkipped(nfaLineId.ToString(), "Duplicate nfa_line_id in target");
-                    continue;
-                }
-                toInsert.Add(record);
+                // If we get a duplicate key error, fall back to individual inserts with ON CONFLICT
+                _logger.LogWarning($"Batch COPY failed due to duplicates, using ON CONFLICT fallback");
+                insertedCount = await InsertBatchWithConflictHandlingAsync(batch, pgConn, transaction);
             }
-            if (toInsert.Count == 0)
-            {
-                if (ownTransaction)
-                {
-                    await transaction.CommitAsync();
-                    await transaction.DisposeAsync();
-                }
-                return 0;
-            }
-            // Use PostgreSQL COPY for high-performance bulk insert
-            var columns = toInsert.First().Keys.ToList();
-            var copyCommand = $"COPY nfa_line ({string.Join(", ", columns)}) FROM STDIN (FORMAT BINARY)";
-            using (var writer = pgConn.BeginBinaryImport(copyCommand))
-            {
-                foreach (var record in toInsert)
-                {
-                    writer.StartRow();
-                    foreach (var col in columns)
-                    {
-                        var value = record[col];
-                        writer.Write(value == DBNull.Value ? null : value);
-                    }
-                }
-                await writer.CompleteAsync();
-            }
+            
             if (ownTransaction)
             {
                 await transaction.CommitAsync();
             }
-            insertedCount += toInsert.Count;
             return insertedCount;
         }
         catch (Exception ex)
@@ -660,12 +664,7 @@ public class NfaLineMigration : MigrationService
             {
                 await transaction.RollbackAsync();
             }
-            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records (COPY)");
-            foreach (var record in batch)
-            {
-                var recordData = string.Join(", ", record.Select(kv => $"{kv.Key}={kv.Value ?? "NULL"}"));
-                _logger.LogError($"Failed record: {recordData}");
-            }
+            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records");
             throw;
         }
         finally
@@ -675,5 +674,39 @@ public class NfaLineMigration : MigrationService
                 await transaction.DisposeAsync();
             }
         }
+    }
+    
+    private async Task<int> InsertBatchWithConflictHandlingAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn, NpgsqlTransaction transaction)
+    {
+        int insertedCount = 0;
+        
+        // Build a single parameterized query with ON CONFLICT
+        using var cmd = new NpgsqlCommand();
+        cmd.Connection = pgConn;
+        cmd.Transaction = transaction;
+        
+        foreach (var record in batch)
+        {
+            cmd.CommandText = InsertQuery;
+            cmd.Parameters.Clear();
+            
+            foreach (var kvp in record)
+            {
+                cmd.Parameters.AddWithValue($"@{kvp.Key}", kvp.Value);
+            }
+            
+            try
+            {
+                await cmd.ExecuteNonQueryAsync();
+                insertedCount++;
+            }
+            catch (PostgresException pgEx) when (pgEx.SqlState == "23505")
+            {
+                // Duplicate key, skip
+                _logger.LogDebug($"Skipped duplicate record: {record["nfa_line_id"]}");
+            }
+        }
+        
+        return insertedCount;
     }
 }

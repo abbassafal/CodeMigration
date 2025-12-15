@@ -891,17 +891,31 @@ public class NfaHeaderMigration : MigrationService
 
         try
         {
-            foreach (var record in batch)
+            // Use PostgreSQL COPY for high-performance bulk insert
+            var columns = batch.First().Keys.ToList();
+            var copyCommand = $"COPY nfa_header ({string.Join(", ", columns)}) FROM STDIN (FORMAT BINARY)";
+            
+            try
             {
-                using var cmd = new NpgsqlCommand(InsertQuery, pgConn, transaction);
-
-                foreach (var kvp in record)
+                using (var writer = pgConn.BeginBinaryImport(copyCommand))
                 {
-                    cmd.Parameters.AddWithValue($"@{kvp.Key}", kvp.Value ?? DBNull.Value);
+                    foreach (var record in batch)
+                    {
+                        writer.StartRow();
+                        foreach (var col in columns)
+                        {
+                            var value = record[col];
+                            writer.Write(value == DBNull.Value ? null : value);
+                        }
+                    }
+                    insertedCount = (int)await writer.CompleteAsync();
                 }
-
-                await cmd.ExecuteNonQueryAsync();
-                insertedCount++;
+            }
+            catch (PostgresException pgEx) when (pgEx.SqlState == "23505") // Unique violation
+            {
+                // If we get a duplicate key error, fall back to individual inserts with ON CONFLICT
+                _logger.LogWarning($"Batch COPY failed due to duplicates, using ON CONFLICT fallback");
+                insertedCount = await InsertBatchWithConflictHandlingAsync(batch, pgConn, transaction);
             }
 
             // Only commit if we created our own transaction
@@ -929,6 +943,39 @@ public class NfaHeaderMigration : MigrationService
             }
         }
 
+        return insertedCount;
+    }
+    
+    private async Task<int> InsertBatchWithConflictHandlingAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn, NpgsqlTransaction transaction)
+    {
+        int insertedCount = 0;
+        
+        using var cmd = new NpgsqlCommand();
+        cmd.Connection = pgConn;
+        cmd.Transaction = transaction;
+        
+        foreach (var record in batch)
+        {
+            cmd.CommandText = InsertQuery;
+            cmd.Parameters.Clear();
+
+            foreach (var kvp in record)
+            {
+                cmd.Parameters.AddWithValue($"@{kvp.Key}", kvp.Value ?? DBNull.Value);
+            }
+            
+            try
+            {
+                await cmd.ExecuteNonQueryAsync();
+                insertedCount++;
+            }
+            catch (PostgresException pgEx) when (pgEx.SqlState == "23505")
+            {
+                // Duplicate key, skip
+                _logger.LogDebug($"Skipped duplicate record: {record["nfa_header_id"]}");
+            }
+        }
+        
         return insertedCount;
     }
 }
