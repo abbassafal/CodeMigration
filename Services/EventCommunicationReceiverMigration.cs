@@ -171,15 +171,6 @@ namespace DataMigration.Services
                             continue;
                         }
 
-                        if (!validUserIds.Contains(record.ToUserId.Value))
-                        {
-                            _migrationLogger.LogSkipped($"ToUserId={record.ToUserId} not found in users", 
-                                $"MailMsgSubId={record.MailMsgSubId}", 
-                                new Dictionary<string, object> { { "ToUserId", record.ToUserId.Value } });
-                            skippedRecords++;
-                            continue;
-                        }
-
                         // Validate required text fields (NOT NULL constraints)
                         if (string.IsNullOrWhiteSpace(record.ToUserType))
                         {

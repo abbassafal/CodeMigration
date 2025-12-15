@@ -16,7 +16,7 @@ public class TermTemplateMasterMigration : MigrationService
 
     protected override string SelectQuery => @"
         SELECT 
-            TBL_CLAUSEMASTER.CLAUSE_MASTER_ID,
+            TBL_CLAUSETRN.CLAUSE_TRN_ID,
             TBL_CLAUSEMASTER.DEFINATION AS TemplateName,
             (
                 SELECT TBL_CLAUSETERMMASTER.TERMID 
@@ -88,7 +88,7 @@ public class TermTemplateMasterMigration : MigrationService
     {
         return new List<object>
         {
-            new { source = "CLAUSE_MASTER_ID", logic = "CLAUSE_MASTER_ID -> term_template_master_id (Primary key, autoincrement)", target = "term_template_master_id" },
+            new { source = "CLAUSE_TRN_ID", logic = "CLAUSE_TRN_ID -> term_template_master_id (Primary key, autoincrement)", target = "term_template_master_id" },
             new { source = "DEFINATION", logic = "DEFINATION -> term_template_name (TermTemplateName - Primary mapping)", target = "term_template_name" },
             new { source = "REF_KEY", logic = "REF_KEY -> Used as fallback if DEFINATION is NULL", target = "-" },
             new { source = "term_master", logic = "term_master_id -> First available ID from term_master table", target = "term_master_id" },
@@ -133,28 +133,28 @@ public class TermTemplateMasterMigration : MigrationService
             {
                 totalRecords++;
 
-                var clauseMasterId = reader["CLAUSE_MASTER_ID"];
+                var clauseTrnId = reader["CLAUSE_TRN_ID"];
                 var templateName = reader["TemplateName"];
                 var termId = reader["TermId"];
 
-                // Skip if CLAUSE_MASTER_ID is NULL
-                if (clauseMasterId == DBNull.Value)
+                // Skip if CLAUSE_TRN_ID is NULL
+                if (clauseTrnId == DBNull.Value)
                 {
                     skippedRecords++;
-                    string reason = "CLAUSE_MASTER_ID is NULL";
+                    string reason = "CLAUSE_TRN_ID is NULL";
                     _logger.LogWarning($"Skipping record - {reason}");
                     skippedRecordsList.Add(("", reason));
                     continue;
                 }
 
-                int clauseMasterIdValue = Convert.ToInt32(clauseMasterId);
+                int clauseTrnIdValue = Convert.ToInt32(clauseTrnId);
 
                 // Skip duplicates
-                if (processedIds.Contains(clauseMasterIdValue))
+                if (processedIds.Contains(clauseTrnIdValue))
                 {
                     skippedRecords++;
-                    string reason = $"Duplicate CLAUSE_MASTER_ID {clauseMasterIdValue}";
-                    skippedRecordsList.Add((clauseMasterIdValue.ToString(), reason));
+                    string reason = $"Duplicate CLAUSE_TRN_ID {clauseTrnIdValue}";
+                    skippedRecordsList.Add((clauseTrnIdValue.ToString(), reason));
                     continue;
                 }
 
@@ -162,15 +162,15 @@ public class TermTemplateMasterMigration : MigrationService
                 if (termId == DBNull.Value)
                 {
                     skippedRecords++;
-                    string reason = $"TermId is NULL for CLAUSE_MASTER_ID {clauseMasterIdValue}";
-                    _logger.LogWarning($"Skipping record {clauseMasterIdValue} - {reason}");
-                    skippedRecordsList.Add((clauseMasterIdValue.ToString(), reason));
+                    string reason = $"TermId is NULL for CLAUSE_TRN_ID {clauseTrnIdValue}";
+                    _logger.LogWarning($"Skipping record {clauseTrnIdValue} - {reason}");
+                    skippedRecordsList.Add((clauseTrnIdValue.ToString(), reason));
                     continue;
                 }
 
                 var record = new Dictionary<string, object>
                 {
-                    ["term_template_master_id"] = clauseMasterIdValue,
+                    ["term_template_master_id"] = clauseTrnIdValue,
                     ["term_template_name"] = templateName ?? DBNull.Value,
                     ["term_master_id"] = termId,
                     ["created_by"] = DBNull.Value,
@@ -183,7 +183,7 @@ public class TermTemplateMasterMigration : MigrationService
                 };
 
                 batch.Add(record);
-                processedIds.Add(clauseMasterIdValue);
+                processedIds.Add(clauseTrnIdValue);
 
                 if (batch.Count >= BATCH_SIZE)
                 {

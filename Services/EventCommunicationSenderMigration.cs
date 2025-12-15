@@ -181,15 +181,6 @@ namespace DataMigration.Services
                             continue;
                         }
 
-                        if (!validUserIds.Contains(record.FromUserId.Value))
-                        {
-                            _migrationLogger.LogSkipped($"FromUserId={record.FromUserId} not found in users", 
-                                $"MailMsgMainId={record.MailMsgMainId}", 
-                                new Dictionary<string, object> { { "FromUserId", record.FromUserId.Value } });
-                            skippedRecords++;
-                            continue;
-                        }
-
                         // Validate required text fields (NOT NULL constraints)
                         if (string.IsNullOrWhiteSpace(record.FromUserType))
                         {
@@ -227,7 +218,7 @@ namespace DataMigration.Services
                         }
 
                         // Track records that have a parent for second pass update
-                        if (record.ParentId.HasValue)
+                        if (record.ParentId.HasValue && record.ParentId.Value != 0)
                         {
                             recordsWithParent.Add((record.MailMsgMainId, record.ParentId.Value));
                         }
@@ -276,7 +267,6 @@ namespace DataMigration.Services
                 if (recordsWithParent.Any())
                 {
                     _logger.LogInformation($"Starting second pass to update replyid for {recordsWithParent.Count} records...");
-                    
                     // Build lookup of valid ec_senderids that were just inserted
                     var insertedEcSenderIds = new HashSet<int>();
                     using (var cmd = new NpgsqlCommand(@"
@@ -290,25 +280,21 @@ namespace DataMigration.Services
                             insertedEcSenderIds.Add(reader.GetInt32(0));
                         }
                     }
-
                     int updatedCount = 0;
                     int skippedUpdateCount = 0;
-
+                    // Batch update for better performance
+                    const int updateBatchSize = 1000;
+                    var updateBatch = new List<(int MailMsgMainId, int ParentId)>();
                     foreach (var (mailMsgMainId, parentId) in recordsWithParent)
                     {
-                        // Check if both the record and its parent exist in PostgreSQL
                         if (insertedEcSenderIds.Contains(parentId))
                         {
-                            // Update replyid
-                            using (var cmd = new NpgsqlCommand(@"
-                                UPDATE event_communication_sender 
-                                SET replyid = @ParentId 
-                                WHERE ec_senderid = @MailMsgMainId", pgConnection))
+                            updateBatch.Add((mailMsgMainId, parentId));
+                            if (updateBatch.Count >= updateBatchSize)
                             {
-                                cmd.Parameters.AddWithValue("@ParentId", parentId);
-                                cmd.Parameters.AddWithValue("@MailMsgMainId", mailMsgMainId);
-                                await cmd.ExecuteNonQueryAsync();
-                                updatedCount++;
+                                await BatchUpdateReplyIds(pgConnection, updateBatch);
+                                updatedCount += updateBatch.Count;
+                                updateBatch.Clear();
                             }
                         }
                         else
@@ -319,7 +305,11 @@ namespace DataMigration.Services
                             skippedUpdateCount++;
                         }
                     }
-
+                    if (updateBatch.Count > 0)
+                    {
+                        await BatchUpdateReplyIds(pgConnection, updateBatch);
+                        updatedCount += updateBatch.Count;
+                    }
                     _logger.LogInformation($"Second pass completed. Updated replyid for {updatedCount} records, skipped {skippedUpdateCount}");
                 }
 
@@ -398,6 +388,29 @@ namespace DataMigration.Services
             {
                 _logger.LogError($"Batch insert failed: {ex.Message}");
                 throw;
+            }
+        }
+
+        // Add this helper method to the class:
+        private async Task BatchUpdateReplyIds(NpgsqlConnection pgConnection, List<(int mailMsgMainId, int parentId)> batch)
+        {
+            if (batch == null || batch.Count == 0) return;
+            // Use CASE WHEN for batch update
+            var ids = batch.Select(x => x.mailMsgMainId).ToList();
+            var caseStatements = new System.Text.StringBuilder();
+            var parameters = new List<NpgsqlParameter>();
+            for (int i = 0; i < batch.Count; i++)
+            {
+                caseStatements.Append($"WHEN ec_senderid = @id{i} THEN @parent{i} ");
+                parameters.Add(new NpgsqlParameter($"@id{i}", batch[i].mailMsgMainId));
+                parameters.Add(new NpgsqlParameter($"@parent{i}", batch[i].parentId));
+            }
+            var inClause = string.Join(",", ids.Select((id, i) => $"@id{i}"));
+            var sql = $@"UPDATE event_communication_sender SET replyid = CASE {caseStatements} END WHERE ec_senderid IN ({inClause})";
+            using (var cmd = new NpgsqlCommand(sql, pgConnection))
+            {
+                cmd.Parameters.AddRange(parameters.ToArray());
+                await cmd.ExecuteNonQueryAsync();
             }
         }
 

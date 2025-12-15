@@ -174,7 +174,8 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
         while (await reader.ReadAsync())
         {
             processedCount++;
-            var eventSelUserId = reader["EVENTSELUSERID"]?.ToString() ?? "NULL";
+            // Parse as int, not string
+            int eventSelUserId = Convert.ToInt32(reader["EVENTSELUSERID"]);
             var eventId = reader["EVENTID"] ?? DBNull.Value;
             var userId = reader["USERID"] ?? DBNull.Value;
 
@@ -185,7 +186,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             {
                 _migrationLogger.LogSkipped("EVENTID is NULL", recordId, new Dictionary<string, object> { { "EVENTID", eventId } });
                 skippedCount++;
-                skippedRecords.Add((eventSelUserId, "EVENTID is NULL"));
+                skippedRecords.Add((eventSelUserId.ToString(), "EVENTID is NULL"));
                 continue;
             }
 
@@ -194,7 +195,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             {
                 _migrationLogger.LogSkipped($"EVENTID {eventIdValue} not found in event_master", recordId, new Dictionary<string, object> { { "EVENTID", eventIdValue } });
                 skippedCount++;
-                skippedRecords.Add((eventSelUserId, $"EVENTID {eventIdValue} not found in event_master"));
+                skippedRecords.Add((eventSelUserId.ToString(), $"EVENTID {eventIdValue} not found in event_master"));
                 continue;
             }
 
@@ -202,7 +203,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             {
                 _migrationLogger.LogSkipped("USERID is NULL", recordId, new Dictionary<string, object> { { "USERID", userId } });
                 skippedCount++;
-                skippedRecords.Add((eventSelUserId, "USERID is NULL"));
+                skippedRecords.Add((eventSelUserId.ToString(), "USERID is NULL"));
                 continue;
             }
 
@@ -211,7 +212,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
             {
                 _migrationLogger.LogSkipped($"USERID {userIdValue} not found in supplier_master", recordId, new Dictionary<string, object> { { "USERID", userIdValue } });
                 skippedCount++;
-                skippedRecords.Add((eventSelUserId, $"USERID {userIdValue} not found in supplier_master"));
+                skippedRecords.Add((eventSelUserId.ToString(), $"USERID {userIdValue} not found in supplier_master"));
                 continue;
             }
 
@@ -234,7 +235,7 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET
 
             var record = new Dictionary<string, object>
             {
-                ["assigned_event_vendor_id"] = eventSelUserId,
+                ["assigned_event_vendor_id"] = eventSelUserId, // int, not string
                 ["event_id"] = eventId,
                 ["supplier_id"] = userId,
                 ["supplier_participation_status"] = participateStatus,
@@ -380,8 +381,20 @@ ON CONFLICT (assigned_event_vendor_id) DO UPDATE SET {updateSet}";
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Batch {batchNumber}: Error during insert");
+            _logger.LogError(ex, $"Batch {batchNumber}: Error during insert. SQL: {sql}");
+            foreach (var record in deduplicatedBatch)
+            {
+                var recordData = string.Join(", ", record.Select(kv => $"{kv.Key}={kv.Value ?? "NULL"}"));
+                _logger.LogError($"Batch {batchNumber}: Record data: {recordData}");
+            }
             _migrationLogger?.LogError($"Batch {batchNumber}: Error during insert", $"Batch={batchNumber}", ex);
+            // Optionally, rollback the transaction if provided
+            if (transaction != null)
+            {
+                try { transaction.Rollback(); } catch { }
+            }
+            // Optionally, rethrow or return 0 to continue with next batch
+            return 0;
         }
         return result;
     }

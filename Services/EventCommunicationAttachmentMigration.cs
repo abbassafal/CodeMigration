@@ -260,9 +260,9 @@ namespace DataMigration.Services
                         {
                             skippedRecords++;
                             _migrationLogger.LogSkipped(
-                                "event_id lookup returned null for DocNo",
+                                "event_id lookup returned null for DocNo (TBL_MAILMSGMAIN.EventId is NULL)",
                                 $"MailDocId={record.MailDocId}",
-                                new Dictionary<string, object> { { "DocNo", record.DocNo } }
+                                new Dictionary<string, object> { { "DocNo", record.DocNo ?? string.Empty } }
                             );
                             continue;
                         }
@@ -271,7 +271,7 @@ namespace DataMigration.Services
                         {
                             skippedRecords++;
                             _migrationLogger.LogSkipped(
-                                $"event_id={eventId} not found in event_master",
+                                $"event_id={eventId} not found in event_master (FK violation)",
                                 $"MailDocId={record.MailDocId}",
                                 new Dictionary<string, object> { { "event_id", eventId } }
                             );
@@ -282,9 +282,9 @@ namespace DataMigration.Services
                         {
                             skippedRecords++;
                             _migrationLogger.LogSkipped(
-                                "ec_senderid lookup returned null for DocNo",
+                                "ec_senderid lookup returned null for DocNo (TBL_MAILMSGMAIN.MailMsgMainId is NULL)",
                                 $"MailDocId={record.MailDocId}",
-                                new Dictionary<string, object> { { "DocNo", record.DocNo } }
+                                new Dictionary<string, object> { { "DocNo", record.DocNo ?? string.Empty } }
                             );
                             continue;
                         }
@@ -293,50 +293,22 @@ namespace DataMigration.Services
                         {
                             skippedRecords++;
                             _migrationLogger.LogSkipped(
-                                $"ec_senderid={ecSenderId} not found in event_communication_sender",
+                                $"ec_senderid={ecSenderId} not found in event_communication_sender (FK violation)",
                                 $"MailDocId={record.MailDocId}",
                                 new Dictionary<string, object> { { "ec_senderid", ecSenderId } }
                             );
                             continue;
                         }
 
-                        if (uploadedBy.HasValue && !validUserIds.Contains(uploadedBy.Value))
-                        {
-                            _migrationLogger.LogSkipped(
-                                $"uploaded_by={uploadedBy} not found in users, setting to NULL",
-                                $"MailDocId={record.MailDocId}",
-                                new Dictionary<string, object> { { "uploaded_by", uploadedBy } }
-                            );
-                            uploadedBy = null;
-                        }
-
-                        if (string.IsNullOrWhiteSpace(record.FileName))
-                        {
-                            skippedRecords++;
-                            _migrationLogger.LogSkipped(
-                                "FileName is null/empty",
-                                $"MailDocId={record.MailDocId}"
-                            );
-                            continue;
-                        }
-
-                        if (string.IsNullOrWhiteSpace(record.Type))
-                        {
-                            skippedRecords++;
-                            _migrationLogger.LogSkipped(
-                                "Type is null/empty",
-                                $"MailDocId={record.MailDocId}"
-                            );
-                            continue;
-                        }
-
+                        // When mapping uploaded_by, do not check if user exists in users table, just insert the value (even if it does not exist)
+                        // When mapping file_type, allow NULL or empty values for Type (do not skip or error)
                         var targetRow = new TargetRow
                         {
                             EventId = eventId.Value,
                             EcSenderId = ecSenderId.Value,
                             UploadPath = string.IsNullOrWhiteSpace(record.UploadPath) ? "" : record.UploadPath,
                             FileName = record.FileName,
-                            FileType = record.Type,
+                            FileType = record.Type ?? string.Empty,
                             UploadedBy = uploadedBy
                         };
 

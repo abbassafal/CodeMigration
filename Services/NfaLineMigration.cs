@@ -560,6 +560,21 @@ public class NfaLineMigration : MigrationService
         return map.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToArray());
     }
 
+    private async Task<HashSet<int>> GetExistingNfaLineIdsAsync(NpgsqlConnection pgConn, IEnumerable<int> nfaLineIds)
+    {
+        var existingIds = new HashSet<int>();
+        if (!nfaLineIds.Any()) return existingIds;
+        var idList = string.Join(",", nfaLineIds);
+        var query = $"SELECT nfa_line_id FROM nfa_line WHERE nfa_line_id = ANY(ARRAY[{idList}])";
+        using var cmd = new NpgsqlCommand(query, pgConn);
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            existingIds.Add(reader.GetInt32(0));
+        }
+        return existingIds;
+    }
+
     private async Task<int> InsertBatchWithTransactionAsync(List<Dictionary<string, object>> batch, NpgsqlConnection pgConn, NpgsqlTransaction? parentTransaction = null)
     {
         int insertedCount = 0;
@@ -572,21 +587,71 @@ public class NfaLineMigration : MigrationService
         }
         try
         {
+            // SKIP LOGIC: Query for existing nfa_line_id in the batch
+            var nfaLineIds = batch.Select(r => r["nfa_line_id"]).ToList();
+            var existingIds = new HashSet<int>();
+            if (nfaLineIds.Count > 0)
+            {
+                var paramNames = nfaLineIds.Select((id, idx) => $"@id{idx}").ToArray();
+                var query = $"SELECT nfa_line_id FROM nfa_line WHERE nfa_line_id IN ({string.Join(",", paramNames)})";
+                using (var cmd = new NpgsqlCommand(query, pgConn, transaction))
+                {
+                    for (int i = 0; i < nfaLineIds.Count; i++)
+                    {
+                        cmd.Parameters.AddWithValue($"@id{i}", nfaLineIds[i]);
+                    }
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            existingIds.Add(reader.GetInt32(0));
+                        }
+                    }
+                }
+            }
+            // Remove records with duplicate PKs and log them as skipped
+            var toInsert = new List<Dictionary<string, object>>();
             foreach (var record in batch)
             {
-                using var cmd = new NpgsqlCommand(InsertQuery, pgConn, transaction);
-                cmd.CommandTimeout = 300; // Set 5 minute timeout for each insert
-                foreach (var kvp in record)
+                int nfaLineId = Convert.ToInt32(record["nfa_line_id"]);
+                if (existingIds.Contains(nfaLineId))
                 {
-                    cmd.Parameters.AddWithValue($"@{kvp.Key}", kvp.Value);
+                    _logger.LogWarning($"Skipping record {nfaLineId} - nfa_line_id already exists in target table");
+                    _migrationLogger?.LogSkipped(nfaLineId.ToString(), "Duplicate nfa_line_id in target");
+                    continue;
                 }
-                await cmd.ExecuteNonQueryAsync();
-                insertedCount++;
+                toInsert.Add(record);
+            }
+            if (toInsert.Count == 0)
+            {
+                if (ownTransaction)
+                {
+                    await transaction.CommitAsync();
+                    await transaction.DisposeAsync();
+                }
+                return 0;
+            }
+            // Use PostgreSQL COPY for high-performance bulk insert
+            var columns = toInsert.First().Keys.ToList();
+            var copyCommand = $"COPY nfa_line ({string.Join(", ", columns)}) FROM STDIN (FORMAT BINARY)";
+            using (var writer = pgConn.BeginBinaryImport(copyCommand))
+            {
+                foreach (var record in toInsert)
+                {
+                    writer.StartRow();
+                    foreach (var col in columns)
+                    {
+                        var value = record[col];
+                        writer.Write(value == DBNull.Value ? null : value);
+                    }
+                }
+                await writer.CompleteAsync();
             }
             if (ownTransaction)
             {
                 await transaction.CommitAsync();
             }
+            insertedCount += toInsert.Count;
             return insertedCount;
         }
         catch (Exception ex)
@@ -595,7 +660,12 @@ public class NfaLineMigration : MigrationService
             {
                 await transaction.RollbackAsync();
             }
-            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records");
+            _logger.LogError(ex, $"Error inserting batch of {batch.Count} records (COPY)");
+            foreach (var record in batch)
+            {
+                var recordData = string.Join(", ", record.Select(kv => $"{kv.Key}={kv.Value ?? "NULL"}"));
+                _logger.LogError($"Failed record: {recordData}");
+            }
             throw;
         }
         finally
