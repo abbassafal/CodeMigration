@@ -183,7 +183,30 @@ public class ARCMainMigration : MigrationService
                 pgCmd.Parameters.AddWithValue("@approval_status", reader["Status"] ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@supplier_id", reader["VendorId"] ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@total_arc_value", reader["TotalARCValue"] ?? DBNull.Value);
-                pgCmd.Parameters.AddWithValue("@arc_type", reader["QuantityLimitation"] ?? DBNull.Value);
+                var qtyLimObj = reader["QuantityLimitation"];
+                object arcTypeValue;
+                if (qtyLimObj != DBNull.Value && qtyLimObj != null)
+                {
+                    try
+                    {
+                        var qLim = Convert.ToInt32(qtyLimObj);
+                        if (qLim == 1 || qLim == 3)
+                            arcTypeValue = "qty";
+                        else if (qLim == 2)
+                            arcTypeValue = "value";
+                        else
+                            arcTypeValue = qLim; // fallback: keep numeric code
+                    }
+                    catch
+                    {
+                        arcTypeValue = DBNull.Value;
+                    }
+                }
+                else
+                {
+                    arcTypeValue = DBNull.Value;
+                }
+                pgCmd.Parameters.AddWithValue("@arc_type", arcTypeValue);
                 pgCmd.Parameters.AddWithValue("@tolerance_percentage", reader["ValueTolerance"] ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@company_id", reader["ClientSAPId"] ?? DBNull.Value);
                 pgCmd.Parameters.AddWithValue("@event_id", reader["EventId"] ?? DBNull.Value);
